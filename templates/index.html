@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baseball Stats Calculator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Baseball Stats Calculator</h1>
+        
+        <div class="controls">
+            <div class="scoring-section">
+                <h2>Scoring Weights</h2>
+                <div class="weight-inputs">
+                    <div class="weight-column">
+                        <h3>Batting</h3>
+                        <div class="input-group">
+                            <label for="avg">AVG:</label>
+                            <input type="number" id="avg" value="300" step="1">
+                        </div>
+                        <div class="input-group">
+                            <label for="runs">Runs:</label>
+                            <input type="number" id="runs" value="5" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="rbi">RBI:</label>
+                            <input type="number" id="rbi" value="5" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="steals">Steals:</label>
+                            <input type="number" id="steals" value="8" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="hr">HRs:</label>
+                            <input type="number" id="hr" value="10" step="0.1">
+                        </div>
+                    </div>
+                    <div class="weight-column">
+                        <h3>Pitching</h3>
+                        <div class="input-group">
+                            <label for="wins">Wins:</label>
+                            <input type="number" id="wins" value="7" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="era">ERA:</label>
+                            <input type="number" id="era" value="15" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="strikeouts">K's:</label>
+                            <input type="number" id="strikeouts" value="2" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="walks">BB's:</label>
+                            <input type="number" id="walks" value="5" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="saves">Saves:</label>
+                            <input type="number" id="saves" value="8" step="0.1">
+                        </div>
+                    </div>
+                </div>
+                <button id="calculate-btn">Calculate Player Values</button>
+            </div>
+            
+            <div class="options-row">
+                <div class="year-toggle">
+                    <label>Stats Year:</label>
+                    <div class="toggle-buttons">
+                        <button class="year-btn active" data-year="2024">2024 Actual</button>
+                        <button class="year-btn" data-year="2025">2025 Projected</button>
+                    </div>
+                </div>
+                
+                <div class="filter-section">
+                    <label for="position-filter">Filter by Position:</label>
+                    <select id="position-filter">
+                        <option value="all">All Players</option>
+                        <option value="batter">Batters Only</option>
+                        <option value="pitcher">Pitchers Only</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="results-section">
+            <h2>Player Rankings</h2>
+            <div class="table-container">
+                <table id="players-table">
+                    <thead>
+                        <tr>
+                            <th data-sort="name">Player Name</th>
+                            <th data-sort="team">Team</th>
+                            <th data-sort="position">Position</th>
+                            <th class="batting-stat" data-sort="avg">AVG</th>
+                            <th class="batting-stat" data-sort="runs">Runs</th>
+                            <th class="batting-stat" data-sort="rbi">RBI</th>
+                            <th class="batting-stat" data-sort="steals">Steals</th>
+                            <th class="batting-stat" data-sort="hr">HRs</th>
+                            <th class="pitching-stat" data-sort="wins">Wins</th>
+                            <th class="pitching-stat" data-sort="era">ERA</th>
+                            <th class="pitching-stat" data-sort="strikeouts">K's</th>
+                            <th class="pitching-stat" data-sort="walks">BB's</th>
+                            <th class="pitching-stat" data-sort="saves">Saves</th>
+                            <th data-sort="points" class="points-column">Points</th>
+                        </tr>
+                    </thead>
+                    <tbody id="players-body">
+                        <!-- Player data will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Baseball Stats Calculator - Local Developer Mode</p>
+            <p><small>Data sourced from MLB Stats API</small></p>
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+</body>
+</html>
