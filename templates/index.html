@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Baseball Stats Calculator</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <title>DiamondDraft - Baseball Stats Calculator</title>
+    <link rel="stylesheet" href="../static/styles.css">
+    <meta name="description" content="Calculate and compare baseball player values for fantasy drafts based on customizable scoring metrics">
 </head>
 <body>
     <div class="container">
-        <h1>Baseball Stats Calculator</h1>
+        <h1>DiamondDraft</h1>
+        <p class="tagline">Baseball Player Value Calculator</p>
         
         <div class="controls">
             <div class="scoring-section">
@@ -81,6 +83,11 @@
                         <option value="pitcher">Pitchers Only</option>
                     </select>
                 </div>
+                
+                <div class="search-section">
+                    <label for="player-search">Search:</label>
+                    <input type="text" id="player-search" placeholder="Player name...">
+                </div>
             </div>
         </div>
         
@@ -113,12 +120,16 @@
             </div>
         </div>
         
+        <div class="data-info">
+            <div id="data-timestamp">Last updated: Loading...</div>
+        </div>
+        
         <div class="footer">
-            <p>Baseball Stats Calculator - Local Developer Mode</p>
-            <p><small>Data sourced from MLB Stats API</small></p>
+            <p>DiamondDraft - Fantasy Baseball Value Calculator</p>
+            <p><small>Data sourced from MLB Stats API. Updated daily.</small></p>
         </div>
     </div>
     
-    <script src="{{ url_for('static', filename='main.js') }}"></script>
+    <script src="../static/main.js"></script>
 </body>
 </html>

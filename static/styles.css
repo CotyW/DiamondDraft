@@ -31,8 +31,15 @@ body {
 h1 {
     color: var(--primary);
     text-align: center;
+    margin-bottom: 5px;
+    font-size: 2.5rem;
+}
+
+.tagline {
+    text-align: center;
     margin-bottom: 20px;
-    font-size: 2rem;
+    font-size: 1.2rem;
+    color: var(--secondary);
 }
 
 h2 {
@@ -106,13 +113,13 @@ button:hover {
     display: flex;
     justify-content: space-between;
     flex-wrap: wrap;
+    gap: 10px;
     margin-bottom: 20px;
 }
 
 .year-toggle {
     display: flex;
     align-items: center;
-    margin-bottom: 10px;
 }
 
 .year-toggle label {
@@ -135,13 +142,12 @@ button:hover {
     color: white;
 }
 
-.filter-section {
+.filter-section, .search-section {
     display: flex;
     align-items: center;
-    margin-bottom: 10px;
 }
 
-.filter-section label {
+.filter-section label, .search-section label {
     margin-right: 10px;
     font-weight: bold;
 }
@@ -152,24 +158,25 @@ button:hover {
     border-radius: 4px;
 }
 
+#player-search {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 200px;
+}
+
 .results-section {
     background-color: white;
     border-radius: 8px;
     padding: 20px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
 }
 
 .table-container {
     overflow-x: auto;
     max-height: 600px;
     overflow-y: auto;
-}
-
-.footer {
-    margin-top: 30px;
-    text-align: center;
-    color: #666;
-    font-size: 0.9rem;
 }
 
 table {
@@ -188,6 +195,9 @@ th {
     color: var(--dark);
     font-weight: bold;
     cursor: pointer;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 th:hover {
@@ -214,6 +224,19 @@ tr:hover {
     background-color: #388e3c;
 }
 
+.data-info {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #666;
+}
+
+.footer {
+    margin-top: 30px;
+    text-align: center;
+    color: #666;
+    font-size: 0.9rem;
+}
+
 @media (max-width: 768px) {
     .weight-inputs {
         flex-direction: column;
@@ -221,6 +244,19 @@ tr:hover {
     
     .weight-column {
         margin-bottom: 20px;
+    }
+    
+    .options-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .year-toggle, .filter-section, .search-section {
+        margin-bottom: 10px;
+    }
+    
+    #player-search {
+        width: 100%;
     }
     
     table {
