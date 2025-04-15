@@ -39,10 +39,10 @@ If you need to update the player data manually:
 ## Project Structure
 
 - `index.html` - Main application page
-- `css/styles.css` - Application styling
-- `js/main.js` - Client-side logic and calculations
-- `data/` - JSON files containing player statistics
-- `fetch_json_data.py` - Script to fetch and process MLB player data
+- `static/styles.css` - Application styling
+- `static/main.js` - Client-side logic and calculations
+- `/templates/data/` - JSON files containing player statistics
+- `fetch_data.py` - Script to fetch and process MLB player data
 - `.github/workflows/update-data.yml` - GitHub Action for automatic data updates
 
 ## License

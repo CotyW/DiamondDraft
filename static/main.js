@@ -83,6 +83,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Calculate player values with default weights
             calculatePlayerValues();
             
+            // Initialize column visibility
+            updateColumnVisibility();
+            
         } catch (error) {
             console.error('Error loading data:', error);
             dataTimestamp.textContent = 'Error loading data. Please try again later.';
@@ -157,6 +160,41 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Display filtered & sorted players
         renderPlayersTable(filteredPlayers);
+        
+        // Update column visibility based on filter
+        updateColumnVisibility();
+    }
+    
+    function updateColumnVisibility() {
+        // Get current filter value
+        const filterValue = positionFilter.value;
+        
+        // Get all column headers and data cells
+        const battingHeaders = document.querySelectorAll('th.batting-stat');
+        const pitchingHeaders = document.querySelectorAll('th.pitching-stat');
+        const battingCells = document.querySelectorAll('td.batting-stat');
+        const pitchingCells = document.querySelectorAll('td.pitching-stat');
+        
+        // Show/hide columns based on filter
+        if (filterValue === 'batter') {
+            // Show batting stats, hide pitching stats
+            battingHeaders.forEach(header => header.classList.remove('hide-column'));
+            pitchingHeaders.forEach(header => header.classList.add('hide-column'));
+            battingCells.forEach(cell => cell.classList.remove('hide-column'));
+            pitchingCells.forEach(cell => cell.classList.add('hide-column'));
+        } else if (filterValue === 'pitcher') {
+            // Show pitching stats, hide batting stats
+            battingHeaders.forEach(header => header.classList.add('hide-column'));
+            pitchingHeaders.forEach(header => header.classList.remove('hide-column'));
+            battingCells.forEach(cell => cell.classList.add('hide-column'));
+            pitchingCells.forEach(cell => cell.classList.remove('hide-column'));
+        } else {
+            // Show all columns for "all players" option
+            battingHeaders.forEach(header => header.classList.remove('hide-column'));
+            pitchingHeaders.forEach(header => header.classList.remove('hide-column'));
+            battingCells.forEach(cell => cell.classList.remove('hide-column'));
+            pitchingCells.forEach(cell => cell.classList.remove('hide-column'));
+        }
     }
     
     function sortPlayers(players) {
@@ -202,6 +240,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear table
         playersBody.innerHTML = '';
         
+        // Get current filter
+        const filterValue = positionFilter.value;
+        
         // Add players to table
         playersData.forEach(player => {
             const row = document.createElement('tr');
@@ -227,12 +268,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td class="points-column">${player.points}</td>
             `;
             
-            // Highlight cells based on player type
-            if (player.is_pitcher) {
+            // Apply hide-column class based on filter
+            if (filterValue === 'batter') {
+                row.querySelectorAll('.pitching-stat').forEach(cell => {
+                    cell.classList.add('hide-column');
+                });
+            } else if (filterValue === 'pitcher') {
+                row.querySelectorAll('.batting-stat').forEach(cell => {
+                    cell.classList.add('hide-column');
+                });
+            }
+            
+            // Additional styling for clarity (optional)
+            if (player.is_pitcher && filterValue === 'all') {
                 row.querySelectorAll('.batting-stat').forEach(cell => {
                     cell.style.opacity = '0.3';
                 });
-            } else {
+            } else if (!player.is_pitcher && filterValue === 'all') {
                 row.querySelectorAll('.pitching-stat').forEach(cell => {
                     cell.style.opacity = '0.3';
                 });
@@ -240,5 +292,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             playersBody.appendChild(row);
         });
+        
+        // Ensure column visibility is correct
+        updateColumnVisibility();
     }
 });

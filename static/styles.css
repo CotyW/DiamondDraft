@@ -237,6 +237,21 @@ tr:hover {
     font-size: 0.9rem;
 }
 
+/* Hide columns based on filter selection */
+.hide-column {
+    display: none;
+}
+
+/* Additional styles for responsive column headers */
+@media (max-width: 768px) {
+    th.batting-stat.hide-column,
+    th.pitching-stat.hide-column,
+    td.batting-stat.hide-column,
+    td.pitching-stat.hide-column {
+        display: none;
+    }
+}
+
 @media (max-width: 768px) {
     .weight-inputs {
         flex-direction: column;
