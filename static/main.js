@@ -69,11 +69,11 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadData() {
         try {
             // Fetch player data
-            const response = await fetch('data/players.json');
+            const response = await fetch('./data/players.json');
             allPlayers = await response.json();
             
             // Fetch last updated timestamp
-            const timestampResponse = await fetch('data/last_updated.json');
+            const timestampResponse = await fetch('./data/last_updated.json');
             const timestampData = await timestampResponse.json();
             
             // Format and display timestamp
