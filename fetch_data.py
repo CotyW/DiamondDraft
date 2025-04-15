@@ -1,19 +1,22 @@
 import requests
 import json
-from database import db, Player
 import time
 from datetime import datetime
+import os
+import random
 
 def fetch_players_data():
     """
-    Fetch real MLB player data from the MLB Stats API and populate the database.
+    Fetch real MLB player data from the MLB Stats API and save as JSON files.
     """
     try:
-        # Clear existing data
-        db.session.query(Player).delete()
-        db.session.commit()
+        # Create data directory if it doesn't exist
+        os.makedirs('data', exist_ok=True)
         
-        # Fetch active MLB players
+        # Lists to store batters and pitchers
+        batters = []
+        pitchers = []
+        
         print("Fetching active MLB players...")
         
         # MLB Stats API base URL
@@ -109,7 +112,6 @@ def fetch_players_data():
                                     batting_stats_2024['hr'] = int(stats.get('homeRuns', 0)) or 0
                                     
                                     # Simple projection: last year + small random adjustment
-                                    import random
                                     factor = random.uniform(0.9, 1.1)  # ±10% variation
                                     
                                     batting_stats_2025['avg'] = round(batting_stats_2024['avg'] * factor, 3)
@@ -131,7 +133,6 @@ def fetch_players_data():
                                     pitching_stats_2024['saves'] = int(stats.get('saves', 0)) or 0
                                     
                                     # Simple projection: last year + small random adjustment
-                                    import random
                                     factor = random.uniform(0.9, 1.1)  # ±10% variation
                                     
                                     pitching_stats_2025['wins'] = int(pitching_stats_2024['wins'] * factor)
@@ -143,43 +144,47 @@ def fetch_players_data():
                                     pitching_stats_2025['saves'] = int(pitching_stats_2024['saves'] * factor)
                                     break
                 
-                # Create player record
-                player = Player(
-                    name=player_info['full_name'],
-                    team=player_info['team_name'],
-                    position=player_info['position'],
-                    is_pitcher=is_pitcher,
-                    
-                    # 2024 stats
-                    avg_2024=batting_stats_2024['avg'],
-                    runs_2024=batting_stats_2024['runs'],
-                    rbi_2024=batting_stats_2024['rbi'],
-                    steals_2024=batting_stats_2024['steals'],
-                    hr_2024=batting_stats_2024['hr'],
-                    wins_2024=pitching_stats_2024['wins'],
-                    era_2024=pitching_stats_2024['era'],
-                    strikeouts_2024=pitching_stats_2024['strikeouts'],
-                    walks_2024=pitching_stats_2024['walks'],
-                    saves_2024=pitching_stats_2024['saves'],
-                    
-                    # 2025 projected stats
-                    avg_2025=batting_stats_2025['avg'],
-                    runs_2025=batting_stats_2025['runs'],
-                    rbi_2025=batting_stats_2025['rbi'],
-                    steals_2025=batting_stats_2025['steals'],
-                    hr_2025=batting_stats_2025['hr'],
-                    wins_2025=pitching_stats_2025['wins'],
-                    era_2025=pitching_stats_2025['era'],
-                    strikeouts_2025=pitching_stats_2025['strikeouts'],
-                    walks_2025=pitching_stats_2025['walks'],
-                    saves_2025=pitching_stats_2025['saves']
-                )
+                # Create player object
+                player_obj = {
+                    'id': player_id,
+                    'name': player_info['full_name'],
+                    'team': player_info['team_name'],
+                    'position': player_info['position'],
+                    'is_pitcher': is_pitcher,
+                    'stats_2024': {
+                        'avg': batting_stats_2024['avg'],
+                        'runs': batting_stats_2024['runs'],
+                        'rbi': batting_stats_2024['rbi'],
+                        'steals': batting_stats_2024['steals'],
+                        'hr': batting_stats_2024['hr'],
+                        'wins': pitching_stats_2024['wins'],
+                        'era': pitching_stats_2024['era'],
+                        'strikeouts': pitching_stats_2024['strikeouts'],
+                        'walks': pitching_stats_2024['walks'],
+                        'saves': pitching_stats_2024['saves']
+                    },
+                    'stats_2025': {
+                        'avg': batting_stats_2025['avg'],
+                        'runs': batting_stats_2025['runs'],
+                        'rbi': batting_stats_2025['rbi'],
+                        'steals': batting_stats_2025['steals'],
+                        'hr': batting_stats_2025['hr'],
+                        'wins': pitching_stats_2025['wins'],
+                        'era': pitching_stats_2025['era'],
+                        'strikeouts': pitching_stats_2025['strikeouts'],
+                        'walks': pitching_stats_2025['walks'],
+                        'saves': pitching_stats_2025['saves']
+                    }
+                }
                 
-                db.session.add(player)
+                # Add to appropriate list
+                if is_pitcher:
+                    pitchers.append(player_obj)
+                else:
+                    batters.append(player_obj)
                 
-                # Commit in batches to avoid memory issues
+                # Log progress
                 if idx % 50 == 0:
-                    db.session.commit()
                     print(f"Processed {idx} players...")
                 
                 # Be nice to the API with a small delay
@@ -188,14 +193,33 @@ def fetch_players_data():
             except Exception as e:
                 print(f"Error processing player {player_info['full_name']}: {str(e)}")
         
-        # Final commit for any remaining players
-        db.session.commit()
-        print("Database populated with real MLB player data")
+        # Create a combined player list
+        all_players = batters + pitchers
+        
+        # Save data as JSON files
+        with open('data/players.json', 'w') as f:
+            json.dump(all_players, f)
+            
+        with open('data/batters.json', 'w') as f:
+            json.dump(batters, f)
+            
+        with open('data/pitchers.json', 'w') as f:
+            json.dump(pitchers, f)
+            
+        # Save last updated timestamp
+        with open('data/last_updated.json', 'w') as f:
+            json.dump({
+                'timestamp': datetime.now().isoformat(),
+                'total_players': len(all_players),
+                'batters': len(batters),
+                'pitchers': len(pitchers)
+            }, f)
+            
+        print(f"Saved {len(all_players)} players ({len(batters)} batters, {len(pitchers)} pitchers)")
         return True
         
     except Exception as e:
-        db.session.rollback()
-        print(f"Error populating database: {str(e)}")
+        print(f"Error fetching players data: {str(e)}")
         return False
 
 def fetch_player_by_name(player_name):
@@ -217,5 +241,5 @@ def fetch_player_by_name(player_name):
 
 if __name__ == "__main__":
     # This allows running this script directly for testing
-    print("Running fetch_data.py directly")
+    print("Running fetch_json_data.py to update player data...")
     fetch_players_data()
