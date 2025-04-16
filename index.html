@@ -96,30 +96,28 @@
             <h2>Player Rankings</h2>
             <div class="table-container">
                 <table id="players-table">
-                   <!-- Replace the existing table header in index.html with this one -->
-<table id="players-table">
-    <thead>
-        <tr>
-            <th data-sort="name">Player Name</th>
-            <th data-sort="team">Team</th>
-            <th data-sort="position">Position</th>
-            <th class="batting-stat" data-sort="avg">AVG</th>
-            <th class="batting-stat" data-sort="runs">Runs</th>
-            <th class="batting-stat" data-sort="rbi">RBI</th>
-            <th class="batting-stat" data-sort="steals">Steals</th>
-            <th class="batting-stat" data-sort="hr">HRs</th>
-            <th class="pitching-stat" data-sort="wins">Wins</th>
-            <th class="pitching-stat" data-sort="era">ERA</th>
-            <th class="pitching-stat" data-sort="strikeouts">K's</th>
-            <th class="pitching-stat" data-sort="walks">BB's</th>
-            <th class="pitching-stat" data-sort="saves">Saves</th>
-            <th data-sort="points" class="points-column">Points</th>
-        </tr>
-    </thead>
-    <tbody id="players-body">
-        <!-- Player data will be populated here -->
-    </tbody>
-</table>
+                    <thead>
+                        <tr>
+                            <th data-sort="name">Player Name</th>
+                            <th data-sort="team">Team</th>
+                            <th data-sort="position">Position</th>
+                            <th class="batting-stat" data-sort="avg">AVG</th>
+                            <th class="batting-stat" data-sort="runs">Runs</th>
+                            <th class="batting-stat" data-sort="rbi">RBI</th>
+                            <th class="batting-stat" data-sort="steals">Steals</th>
+                            <th class="batting-stat" data-sort="hr">HRs</th>
+                            <th class="pitching-stat" data-sort="wins">Wins</th>
+                            <th class="pitching-stat" data-sort="era">ERA</th>
+                            <th class="pitching-stat" data-sort="strikeouts">K's</th>
+                            <th class="pitching-stat" data-sort="walks">BB's</th>
+                            <th class="pitching-stat" data-sort="saves">Saves</th>
+                            <th data-sort="points" class="points-column">Points</th>
+                        </tr>
+                    </thead>
+                    <tbody id="players-body">
+                        <!-- Player data will be populated here -->
+                    </tbody>
+                </table>
             </div>
         </div>
         
@@ -136,116 +134,22 @@
         <p>For inquiries, please reach out to the developer at <a href="mailto:coty1283@gmail.com">coty1283@gmail.com</a></p>
         <p>To support the creator, click the cup and "Buy me a coffee".</p>
     </footer>
+    
     <!-- Buy Me a Coffee Widget -->
-  <script 
-  data-name="BMC-Widget"
-  data-cfasync="false"
-  src="https://cdnjs.buymeacoffee.com/1.0.0/widget.prod.min.js"
-  data-id="coty"
-  data-description="Support me on Buy me a coffee!"
-  data-message="Thanks for visiting DiamondDraft! I am new to development, so updates will come slow, but I WILL be actively updating this page with more features. If you'd like to support this page, feel free to buy me a beer!"
-  data-color="#5F7FFF"
-  data-position="Right"
-  data-x_margin="18"
-  data-y_margin="18">
+    <script 
+        data-name="BMC-Widget"
+        data-cfasync="false"
+        src="https://cdnjs.buymeacoffee.com/1.0.0/widget.prod.min.js"
+        data-id="coty"
+        data-description="Support me on Buy me a coffee!"
+        data-message="Thanks for visiting DiamondDraft! I am new to development, so updates will come slow, but I WILL be actively updating this page with more features. If you'd like to support this page, feel free to buy me a beer!"
+        data-color="#5F7FFF"
+        data-position="Right"
+        data-x_margin="18"
+        data-y_margin="18">
     </script>
+    
+    <!-- Main JavaScript -->
     <script src="/DiamondDraft/static/main.js"></script>
-
-    // Add this script to your HTML file temporarily to help debug issues
-// Place it right before the closing body tag
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    console.log("Applying direct sort fix");
-    
-    // Find all sortable headers
-    const sortableHeaders = document.querySelectorAll('th[data-sort]');
-    console.log(`Found ${sortableHeaders.length} sortable headers`);
-    
-    // Add direct click handlers to each header
-    sortableHeaders.forEach(header => {
-        // Make the cursor appearance show it's clickable
-        header.style.cursor = 'pointer';
-        
-        // Add a click event that directly handles the sorting
-        header.addEventListener('click', function() {
-            const column = this.dataset.sort;
-            console.log(`Sorting by: ${column}`);
-            
-            // Clear all previous sort indicators from all headers
-            document.querySelectorAll('th').forEach(h => {
-                h.classList.remove('sort-asc', 'sort-desc');
-            });
-            
-            // Set the new sort direction
-            let direction;
-            if (this.classList.contains('sort-asc')) {
-                direction = 'desc';
-                this.classList.add('sort-desc');
-            } else {
-                direction = 'asc';
-                this.classList.add('sort-asc');
-            }
-            
-            console.log(`Sort direction: ${direction}`);
-            
-            // Find the index of this column in the table
-            const columnIndex = Array.from(this.parentNode.children).indexOf(this);
-            
-            // Get all the rows except the header row
-            const table = this.closest('table');
-            const tbody = table.querySelector('tbody');
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-            
-            // Sort the rows based on the content of the cells in the selected column
-            rows.sort((rowA, rowB) => {
-                const cellA = rowA.cells[columnIndex].textContent.trim();
-                const cellB = rowB.cells[columnIndex].textContent.trim();
-                
-                // Check if we're dealing with numbers
-                const aIsNumber = !isNaN(parseFloat(cellA));
-                const bIsNumber = !isNaN(parseFloat(cellB));
-                
-                if (aIsNumber && bIsNumber) {
-                    // Sort as numbers
-                    const numA = parseFloat(cellA);
-                    const numB = parseFloat(cellB);
-                    return direction === 'asc' ? numA - numB : numB - numA;
-                } else {
-                    // Sort as strings
-                    return direction === 'asc' 
-                        ? cellA.localeCompare(cellB) 
-                        : cellB.localeCompare(cellA);
-                }
-            });
-            
-            // Re-append the sorted rows to the tbody
-            rows.forEach(row => tbody.appendChild(row));
-            
-            // Highlight the sorted column
-            document.querySelectorAll('td').forEach(cell => {
-                cell.classList.remove('sorted-column');
-            });
-            
-            rows.forEach(row => {
-                if (row.cells[columnIndex]) {
-                    row.cells[columnIndex].classList.add('sorted-column');
-                }
-            });
-        });
-        
-        // Add a small indicator to show it's sortable
-        if (!header.querySelector('.sort-indicator')) {
-            const indicator = document.createElement('span');
-            indicator.className = 'sort-indicator';
-            indicator.style.marginLeft = '5px';
-            indicator.innerHTML = '⇅';
-            indicator.style.opacity = '0.5';
-            indicator.style.fontSize = '0.8em';
-            header.appendChild(indicator);
-        }
-    });
-});
-</script>
 </body>
 </html>
