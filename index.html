@@ -156,157 +156,95 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Create a debug panel
-    const debugPanel = document.createElement('div');
-    debugPanel.style.position = 'fixed';
-    debugPanel.style.bottom = '10px';
-    debugPanel.style.right = '10px';
-    debugPanel.style.backgroundColor = '#f8f9fa';
-    debugPanel.style.border = '1px solid #ddd';
-    debugPanel.style.padding = '10px';
-    debugPanel.style.borderRadius = '5px';
-    debugPanel.style.zIndex = '9999';
-    debugPanel.style.maxHeight = '300px';
-    debugPanel.style.overflowY = 'auto';
-    debugPanel.style.width = '300px';
-    debugPanel.style.fontSize = '12px';
-    debugPanel.style.fontFamily = 'monospace';
+    console.log("Applying direct sort fix");
     
-    const heading = document.createElement('h3');
-    heading.textContent = 'Sorting Debug Panel';
-    heading.style.margin = '0 0 10px 0';
-    heading.style.fontSize = '14px';
-    debugPanel.appendChild(heading);
+    // Find all sortable headers
+    const sortableHeaders = document.querySelectorAll('th[data-sort]');
+    console.log(`Found ${sortableHeaders.length} sortable headers`);
     
-    const toggleBtn = document.createElement('button');
-    toggleBtn.textContent = 'Hide Panel';
-    toggleBtn.style.fontSize = '10px';
-    toggleBtn.style.padding = '2px 5px';
-    toggleBtn.style.marginBottom = '5px';
-    toggleBtn.onclick = function() {
-        const content = document.getElementById('debug-content');
-        if (content.style.display === 'none') {
-            content.style.display = 'block';
-            this.textContent = 'Hide Panel';
-        } else {
-            content.style.display = 'none';
-            this.textContent = 'Show Panel';
-        }
-    };
-    debugPanel.appendChild(toggleBtn);
-    
-    const content = document.createElement('div');
-    content.id = 'debug-content';
-    debugPanel.appendChild(content);
-    
-    const clearBtn = document.createElement('button');
-    clearBtn.textContent = 'Clear Log';
-    clearBtn.style.fontSize = '10px';
-    clearBtn.style.padding = '2px 5px';
-    clearBtn.style.marginRight = '5px';
-    clearBtn.onclick = function() {
-        content.innerHTML = '';
-    };
-    debugPanel.appendChild(clearBtn);
-    
-    const logSorting = document.createElement('button');
-    logSorting.textContent = 'Test Sorting';
-    logSorting.style.fontSize = '10px';
-    logSorting.style.padding = '2px 5px';
-    logSorting.onclick = function() {
-        // Log sorting headers info
-        const headers = document.querySelectorAll('th[data-sort]');
-        log(`Found ${headers.length} sortable headers:`);
-        headers.forEach(header => {
-            log(`- ${header.textContent} (data-sort="${header.dataset.sort}")`);
-            testSortClick(header);
-        });
-    };
-    debugPanel.appendChild(logSorting);
-    
-    document.body.appendChild(debugPanel);
-    
-    // Original console.log
-    const originalLog = console.log;
-    
-    // Override console.log
-    console.log = function() {
-        // Call original console.log
-        originalLog.apply(console, arguments);
+    // Add direct click handlers to each header
+    sortableHeaders.forEach(header => {
+        // Make the cursor appearance show it's clickable
+        header.style.cursor = 'pointer';
         
-        // Add to debug panel
-        const args = Array.from(arguments);
-        log(args.join(' '));
-    };
-    
-    // Helper functions
-    function log(message) {
-        const logItem = document.createElement('div');
-        logItem.textContent = message;
-        logItem.style.borderBottom = '1px solid #eee';
-        logItem.style.paddingBottom = '3px';
-        logItem.style.marginBottom = '3px';
-        content.appendChild(logItem);
-        
-        // Auto-scroll to bottom
-        content.scrollTop = content.scrollHeight;
-    }
-    
-    function testSortClick(header) {
-        const headerText = header.textContent;
-        log(`Testing click on ${headerText}...`);
-        
-        // Create a simulated click event
-        const clickEvent = new MouseEvent('click', {
-            bubbles: true,
-            cancelable: true,
-            view: window
-        });
-        
-        // Dispatch it on the header
-        setTimeout(() => {
-            header.dispatchEvent(clickEvent);
-            log(`Click dispatched on ${headerText}`);
+        // Add a click event that directly handles the sorting
+        header.addEventListener('click', function() {
+            const column = this.dataset.sort;
+            console.log(`Sorting by: ${column}`);
             
-            // Check if the class was added
-            setTimeout(() => {
-                if (header.classList.contains('sort-asc') || header.classList.contains('sort-desc')) {
-                    log(`✓ Sort indicator added to ${headerText}`);
+            // Clear all previous sort indicators from all headers
+            document.querySelectorAll('th').forEach(h => {
+                h.classList.remove('sort-asc', 'sort-desc');
+            });
+            
+            // Set the new sort direction
+            let direction;
+            if (this.classList.contains('sort-asc')) {
+                direction = 'desc';
+                this.classList.add('sort-desc');
+            } else {
+                direction = 'asc';
+                this.classList.add('sort-asc');
+            }
+            
+            console.log(`Sort direction: ${direction}`);
+            
+            // Find the index of this column in the table
+            const columnIndex = Array.from(this.parentNode.children).indexOf(this);
+            
+            // Get all the rows except the header row
+            const table = this.closest('table');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            
+            // Sort the rows based on the content of the cells in the selected column
+            rows.sort((rowA, rowB) => {
+                const cellA = rowA.cells[columnIndex].textContent.trim();
+                const cellB = rowB.cells[columnIndex].textContent.trim();
+                
+                // Check if we're dealing with numbers
+                const aIsNumber = !isNaN(parseFloat(cellA));
+                const bIsNumber = !isNaN(parseFloat(cellB));
+                
+                if (aIsNumber && bIsNumber) {
+                    // Sort as numbers
+                    const numA = parseFloat(cellA);
+                    const numB = parseFloat(cellB);
+                    return direction === 'asc' ? numA - numB : numB - numA;
                 } else {
-                    log(`✗ No sort indicator on ${headerText}`);
+                    // Sort as strings
+                    return direction === 'asc' 
+                        ? cellA.localeCompare(cellB) 
+                        : cellB.localeCompare(cellA);
                 }
-            }, 100);
-        }, 500);
-    }
-    
-    // Log initial state
-    log('Debug panel initialized');
-    log(`Current time: ${new Date().toLocaleTimeString()}`);
-    
-    // Log if we're in a weird state
-    setTimeout(() => {
-        // Check if any headers have both sort-asc and sort-desc
-        const badHeaders = document.querySelectorAll('th.sort-asc.sort-desc');
-        if (badHeaders.length > 0) {
-            log('ERROR: Headers have both sort-asc and sort-desc classes:');
-            badHeaders.forEach(header => {
-                log(`- ${header.textContent}`);
             });
-        }
+            
+            // Re-append the sorted rows to the tbody
+            rows.forEach(row => tbody.appendChild(row));
+            
+            // Highlight the sorted column
+            document.querySelectorAll('td').forEach(cell => {
+                cell.classList.remove('sorted-column');
+            });
+            
+            rows.forEach(row => {
+                if (row.cells[columnIndex]) {
+                    row.cells[columnIndex].classList.add('sorted-column');
+                }
+            });
+        });
         
-        // Check if multiple headers have sort indicators
-        const ascHeaders = document.querySelectorAll('th.sort-asc');
-        const descHeaders = document.querySelectorAll('th.sort-desc');
-        if (ascHeaders.length + descHeaders.length > 1) {
-            log('ERROR: Multiple headers have sort indicators:');
-            ascHeaders.forEach(header => {
-                log(`- ${header.textContent} (asc)`);
-            });
-            descHeaders.forEach(header => {
-                log(`- ${header.textContent} (desc)`);
-            });
+        // Add a small indicator to show it's sortable
+        if (!header.querySelector('.sort-indicator')) {
+            const indicator = document.createElement('span');
+            indicator.className = 'sort-indicator';
+            indicator.style.marginLeft = '5px';
+            indicator.innerHTML = '⇅';
+            indicator.style.opacity = '0.5';
+            indicator.style.fontSize = '0.8em';
+            header.appendChild(indicator);
         }
-    }, 1000);
+    });
 });
 </script>
 </body>
