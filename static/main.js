@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let allPlayers = [];
     let displayedPlayers = [];
     let currentYear = '2024';
+    let dataType = 'actual'; // 'actual' or 'projected'
     let currentSort = {column: 'points', direction: 'desc'};
     let searchTerm = '';
     
@@ -43,7 +44,17 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             yearBtns.forEach(b => b.classList.remove('active'));
             this.classList.add('active');
-            currentYear = this.dataset.year;
+            
+            const yearData = this.dataset.year;
+            if (yearData.includes('_')) {
+                const [year, type] = yearData.split('_');
+                currentYear = year;
+                dataType = type;
+            } else {
+                currentYear = yearData;
+                dataType = 'actual';
+            }
+            
             filterAndDisplayPlayers();
         });
     });
@@ -102,7 +113,17 @@ document.addEventListener('DOMContentLoaded', function() {
         // Calculate points for each player
         displayedPlayers = allPlayers.map(player => {
             const playerCopy = {...player};
-            const stats = playerCopy[`stats_${currentYear}`];
+            
+            // Get the correct stats based on year and data type
+            let stats;
+            if (currentYear === '2025' && dataType === 'projected') {
+                stats = playerCopy.stats_2025_projected;
+            } else if (currentYear === '2025' && dataType === 'actual') {
+                stats = playerCopy.stats_2025_actual;
+            } else {
+                stats = playerCopy.stats_2024;
+            }
+            
             let points = 0;
             
             // Calculate points based on weights
@@ -208,9 +229,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 aValue = a.points;
                 bValue = b.points;
             } else {
-                // Stat columns
-                aValue = a[`stats_${currentYear}`][currentSort.column];
-                bValue = b[`stats_${currentYear}`][currentSort.column];
+                // Get the correct stats based on year and data type
+                let aStats, bStats;
+                
+                if (currentYear === '2025' && dataType === 'projected') {
+                    aStats = a.stats_2025_projected;
+                    bStats = b.stats_2025_projected;
+                } else if (currentYear === '2025' && dataType === 'actual') {
+                    aStats = a.stats_2025_actual;
+                    bStats = b.stats_2025_actual;
+                } else {
+                    aStats = a.stats_2024;
+                    bStats = b.stats_2024;
+                }
+                
+                aValue = aStats[currentSort.column];
+                bValue = bStats[currentSort.column];
             }
             
             // Handle special cases for sorting
@@ -247,8 +281,15 @@ document.addEventListener('DOMContentLoaded', function() {
         playersData.forEach(player => {
             const row = document.createElement('tr');
             
-            // Get stats for current year
-            const stats = player[`stats_${currentYear}`];
+            // Get the correct stats based on year and data type
+            let stats;
+            if (currentYear === '2025' && dataType === 'projected') {
+                stats = player.stats_2025_projected;
+            } else if (currentYear === '2025' && dataType === 'actual') {
+                stats = player.stats_2025_actual;
+            } else {
+                stats = player.stats_2024;
+            }
             
             // Add cells
             row.innerHTML = `
