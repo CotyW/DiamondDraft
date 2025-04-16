@@ -22,7 +22,7 @@ jobs:
           pip install requests
           
       - name: Fetch latest stats
-        run: python fetch_json_data.py
+        run: python fetch_data.py
         
       - name: Commit and push if changes
         run: |
