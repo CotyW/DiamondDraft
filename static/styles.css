@@ -267,18 +267,18 @@ th[data-sort] {
     display: none;
 }
 
-/* Make sortable headers more visually distinct */
+/* Make sure our sort indicators are visible and have the proper content */
 th[data-sort] {
     cursor: pointer;
     position: relative;
-    padding-right: 20px; /* Space for the arrow */
+    padding-right: 25px; /* Space for the arrow */
 }
 
 th[data-sort]:hover {
     background-color: #bbdefb;
 }
 
-/* Clear and visible sorting indicators */
+/* Clear and visible sorting indicators with content directly in CSS */
 th.sort-asc::after,
 th.sort-desc::after {
     position: absolute;
@@ -287,15 +287,16 @@ th.sort-desc::after {
     transform: translateY(-50%);
     font-size: 16px;
     font-weight: bold;
+    display: block !important; /* Force display */
 }
 
 th.sort-asc::after {
-    content: "▲";
+    content: "▲" !important;
     color: var(--primary);
 }
 
 th.sort-desc::after {
-    content: "▼";
+    content: "▼" !important;
     color: var(--primary);
 }
 
