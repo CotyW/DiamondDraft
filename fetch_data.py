@@ -60,6 +60,7 @@ def fetch_players_data():
         
         # Current year for stats
         current_year = datetime.now().year
+        previous_year = current_year - 1
         
         # Process each player
         for idx, player_info in enumerate(all_player_ids):
@@ -93,9 +94,18 @@ def fetch_players_data():
                     'wins': 0, 'era': 0.0, 'strikeouts': 0, 'walks': 0, 'saves': 0
                 }
                 
+                # Initialize 2025 actual stats (will be populated from API)
+                batting_stats_2025_actual = {
+                    'avg': 0.0, 'runs': 0, 'rbi': 0, 'steals': 0, 'hr': 0
+                }
+                
+                pitching_stats_2025_actual = {
+                    'wins': 0, 'era': 0.0, 'strikeouts': 0, 'walks': 0, 'saves': 0
+                }
+                
                 # Make simple projections for 2025 based on 2024 data (or previous years)
-                batting_stats_2025 = dict(batting_stats_2024)
-                pitching_stats_2025 = dict(pitching_stats_2024)
+                batting_stats_2025_projected = dict(batting_stats_2024)
+                pitching_stats_2025_projected = dict(pitching_stats_2024)
                 
                 # Extract stats if available
                 if 'stats' in person:
@@ -103,7 +113,9 @@ def fetch_players_data():
                         if stat_group['group']['displayName'] == 'hitting':
                             for season_stat in stat_group['splits']:
                                 stat_year = season_stat.get('season')
-                                if stat_year == str(current_year - 1):  # Last year's stats (2024)
+                                
+                                # Get 2024 stats (previous year)
+                                if stat_year == str(previous_year):
                                     stats = season_stat['stat']
                                     batting_stats_2024['avg'] = float(stats.get('avg', 0)) or 0
                                     batting_stats_2024['runs'] = int(stats.get('runs', 0)) or 0
@@ -114,17 +126,27 @@ def fetch_players_data():
                                     # Simple projection: last year + small random adjustment
                                     factor = random.uniform(0.9, 1.1)  # ±10% variation
                                     
-                                    batting_stats_2025['avg'] = round(batting_stats_2024['avg'] * factor, 3)
-                                    batting_stats_2025['runs'] = int(batting_stats_2024['runs'] * factor)
-                                    batting_stats_2025['rbi'] = int(batting_stats_2024['rbi'] * factor)
-                                    batting_stats_2025['steals'] = int(batting_stats_2024['steals'] * factor)
-                                    batting_stats_2025['hr'] = int(batting_stats_2024['hr'] * factor)
-                                    break
+                                    batting_stats_2025_projected['avg'] = round(batting_stats_2024['avg'] * factor, 3)
+                                    batting_stats_2025_projected['runs'] = int(batting_stats_2024['runs'] * factor)
+                                    batting_stats_2025_projected['rbi'] = int(batting_stats_2024['rbi'] * factor)
+                                    batting_stats_2025_projected['steals'] = int(batting_stats_2024['steals'] * factor)
+                                    batting_stats_2025_projected['hr'] = int(batting_stats_2024['hr'] * factor)
+                                
+                                # Get 2025 stats (current year)
+                                elif stat_year == str(current_year):
+                                    stats = season_stat['stat']
+                                    batting_stats_2025_actual['avg'] = float(stats.get('avg', 0)) or 0
+                                    batting_stats_2025_actual['runs'] = int(stats.get('runs', 0)) or 0
+                                    batting_stats_2025_actual['rbi'] = int(stats.get('rbi', 0)) or 0
+                                    batting_stats_2025_actual['steals'] = int(stats.get('stolenBases', 0)) or 0
+                                    batting_stats_2025_actual['hr'] = int(stats.get('homeRuns', 0)) or 0
                                     
                         if stat_group['group']['displayName'] == 'pitching':
                             for season_stat in stat_group['splits']:
                                 stat_year = season_stat.get('season')
-                                if stat_year == str(current_year - 1):  # Last year's stats (2024)
+                                
+                                # Get 2024 stats (previous year)
+                                if stat_year == str(previous_year):
                                     stats = season_stat['stat']
                                     pitching_stats_2024['wins'] = int(stats.get('wins', 0)) or 0
                                     pitching_stats_2024['era'] = float(stats.get('era', 0)) or 0
@@ -135,14 +157,22 @@ def fetch_players_data():
                                     # Simple projection: last year + small random adjustment
                                     factor = random.uniform(0.9, 1.1)  # ±10% variation
                                     
-                                    pitching_stats_2025['wins'] = int(pitching_stats_2024['wins'] * factor)
+                                    pitching_stats_2025_projected['wins'] = int(pitching_stats_2024['wins'] * factor)
                                     # ERA is better when lower, so invert factor
                                     era_factor = 2 - factor  # This will be between 0.9 and 1.1
-                                    pitching_stats_2025['era'] = round(pitching_stats_2024['era'] * era_factor, 2)
-                                    pitching_stats_2025['strikeouts'] = int(pitching_stats_2024['strikeouts'] * factor)
-                                    pitching_stats_2025['walks'] = int(pitching_stats_2024['walks'] * era_factor)
-                                    pitching_stats_2025['saves'] = int(pitching_stats_2024['saves'] * factor)
-                                    break
+                                    pitching_stats_2025_projected['era'] = round(pitching_stats_2024['era'] * era_factor, 2)
+                                    pitching_stats_2025_projected['strikeouts'] = int(pitching_stats_2024['strikeouts'] * factor)
+                                    pitching_stats_2025_projected['walks'] = int(pitching_stats_2024['walks'] * era_factor)
+                                    pitching_stats_2025_projected['saves'] = int(pitching_stats_2024['saves'] * factor)
+                                
+                                # Get 2025 stats (current year)
+                                elif stat_year == str(current_year):
+                                    stats = season_stat['stat']
+                                    pitching_stats_2025_actual['wins'] = int(stats.get('wins', 0)) or 0
+                                    pitching_stats_2025_actual['era'] = float(stats.get('era', 0)) or 0
+                                    pitching_stats_2025_actual['strikeouts'] = int(stats.get('strikeOuts', 0)) or 0
+                                    pitching_stats_2025_actual['walks'] = int(stats.get('baseOnBalls', 0)) or 0
+                                    pitching_stats_2025_actual['saves'] = int(stats.get('saves', 0)) or 0
                 
                 # Create player object
                 player_obj = {
@@ -163,17 +193,29 @@ def fetch_players_data():
                         'walks': pitching_stats_2024['walks'],
                         'saves': pitching_stats_2024['saves']
                     },
-                    'stats_2025': {
-                        'avg': batting_stats_2025['avg'],
-                        'runs': batting_stats_2025['runs'],
-                        'rbi': batting_stats_2025['rbi'],
-                        'steals': batting_stats_2025['steals'],
-                        'hr': batting_stats_2025['hr'],
-                        'wins': pitching_stats_2025['wins'],
-                        'era': pitching_stats_2025['era'],
-                        'strikeouts': pitching_stats_2025['strikeouts'],
-                        'walks': pitching_stats_2025['walks'],
-                        'saves': pitching_stats_2025['saves']
+                    'stats_2025_projected': {
+                        'avg': batting_stats_2025_projected['avg'],
+                        'runs': batting_stats_2025_projected['runs'],
+                        'rbi': batting_stats_2025_projected['rbi'],
+                        'steals': batting_stats_2025_projected['steals'],
+                        'hr': batting_stats_2025_projected['hr'],
+                        'wins': pitching_stats_2025_projected['wins'],
+                        'era': pitching_stats_2025_projected['era'],
+                        'strikeouts': pitching_stats_2025_projected['strikeouts'],
+                        'walks': pitching_stats_2025_projected['walks'],
+                        'saves': pitching_stats_2025_projected['saves']
+                    },
+                    'stats_2025_actual': {
+                        'avg': batting_stats_2025_actual['avg'],
+                        'runs': batting_stats_2025_actual['runs'],
+                        'rbi': batting_stats_2025_actual['rbi'],
+                        'steals': batting_stats_2025_actual['steals'],
+                        'hr': batting_stats_2025_actual['hr'],
+                        'wins': pitching_stats_2025_actual['wins'],
+                        'era': pitching_stats_2025_actual['era'],
+                        'strikeouts': pitching_stats_2025_actual['strikeouts'],
+                        'walks': pitching_stats_2025_actual['walks'],
+                        'saves': pitching_stats_2025_actual['saves']
                     }
                 }
                 
@@ -241,5 +283,5 @@ def fetch_player_by_name(player_name):
 
 if __name__ == "__main__":
     # This allows running this script directly for testing
-    print("Running fetch_json_data.py to update player data...")
+    print("Running fetch_data.py to update player data...")
     fetch_players_data()
