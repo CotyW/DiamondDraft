@@ -150,5 +150,164 @@
   data-y_margin="18">
     </script>
     <script src="/DiamondDraft/static/main.js"></script>
+
+    // Add this script to your HTML file temporarily to help debug issues
+// Place it right before the closing body tag
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Create a debug panel
+    const debugPanel = document.createElement('div');
+    debugPanel.style.position = 'fixed';
+    debugPanel.style.bottom = '10px';
+    debugPanel.style.right = '10px';
+    debugPanel.style.backgroundColor = '#f8f9fa';
+    debugPanel.style.border = '1px solid #ddd';
+    debugPanel.style.padding = '10px';
+    debugPanel.style.borderRadius = '5px';
+    debugPanel.style.zIndex = '9999';
+    debugPanel.style.maxHeight = '300px';
+    debugPanel.style.overflowY = 'auto';
+    debugPanel.style.width = '300px';
+    debugPanel.style.fontSize = '12px';
+    debugPanel.style.fontFamily = 'monospace';
+    
+    const heading = document.createElement('h3');
+    heading.textContent = 'Sorting Debug Panel';
+    heading.style.margin = '0 0 10px 0';
+    heading.style.fontSize = '14px';
+    debugPanel.appendChild(heading);
+    
+    const toggleBtn = document.createElement('button');
+    toggleBtn.textContent = 'Hide Panel';
+    toggleBtn.style.fontSize = '10px';
+    toggleBtn.style.padding = '2px 5px';
+    toggleBtn.style.marginBottom = '5px';
+    toggleBtn.onclick = function() {
+        const content = document.getElementById('debug-content');
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            this.textContent = 'Hide Panel';
+        } else {
+            content.style.display = 'none';
+            this.textContent = 'Show Panel';
+        }
+    };
+    debugPanel.appendChild(toggleBtn);
+    
+    const content = document.createElement('div');
+    content.id = 'debug-content';
+    debugPanel.appendChild(content);
+    
+    const clearBtn = document.createElement('button');
+    clearBtn.textContent = 'Clear Log';
+    clearBtn.style.fontSize = '10px';
+    clearBtn.style.padding = '2px 5px';
+    clearBtn.style.marginRight = '5px';
+    clearBtn.onclick = function() {
+        content.innerHTML = '';
+    };
+    debugPanel.appendChild(clearBtn);
+    
+    const logSorting = document.createElement('button');
+    logSorting.textContent = 'Test Sorting';
+    logSorting.style.fontSize = '10px';
+    logSorting.style.padding = '2px 5px';
+    logSorting.onclick = function() {
+        // Log sorting headers info
+        const headers = document.querySelectorAll('th[data-sort]');
+        log(`Found ${headers.length} sortable headers:`);
+        headers.forEach(header => {
+            log(`- ${header.textContent} (data-sort="${header.dataset.sort}")`);
+            testSortClick(header);
+        });
+    };
+    debugPanel.appendChild(logSorting);
+    
+    document.body.appendChild(debugPanel);
+    
+    // Original console.log
+    const originalLog = console.log;
+    
+    // Override console.log
+    console.log = function() {
+        // Call original console.log
+        originalLog.apply(console, arguments);
+        
+        // Add to debug panel
+        const args = Array.from(arguments);
+        log(args.join(' '));
+    };
+    
+    // Helper functions
+    function log(message) {
+        const logItem = document.createElement('div');
+        logItem.textContent = message;
+        logItem.style.borderBottom = '1px solid #eee';
+        logItem.style.paddingBottom = '3px';
+        logItem.style.marginBottom = '3px';
+        content.appendChild(logItem);
+        
+        // Auto-scroll to bottom
+        content.scrollTop = content.scrollHeight;
+    }
+    
+    function testSortClick(header) {
+        const headerText = header.textContent;
+        log(`Testing click on ${headerText}...`);
+        
+        // Create a simulated click event
+        const clickEvent = new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            view: window
+        });
+        
+        // Dispatch it on the header
+        setTimeout(() => {
+            header.dispatchEvent(clickEvent);
+            log(`Click dispatched on ${headerText}`);
+            
+            // Check if the class was added
+            setTimeout(() => {
+                if (header.classList.contains('sort-asc') || header.classList.contains('sort-desc')) {
+                    log(`✓ Sort indicator added to ${headerText}`);
+                } else {
+                    log(`✗ No sort indicator on ${headerText}`);
+                }
+            }, 100);
+        }, 500);
+    }
+    
+    // Log initial state
+    log('Debug panel initialized');
+    log(`Current time: ${new Date().toLocaleTimeString()}`);
+    
+    // Log if we're in a weird state
+    setTimeout(() => {
+        // Check if any headers have both sort-asc and sort-desc
+        const badHeaders = document.querySelectorAll('th.sort-asc.sort-desc');
+        if (badHeaders.length > 0) {
+            log('ERROR: Headers have both sort-asc and sort-desc classes:');
+            badHeaders.forEach(header => {
+                log(`- ${header.textContent}`);
+            });
+        }
+        
+        // Check if multiple headers have sort indicators
+        const ascHeaders = document.querySelectorAll('th.sort-asc');
+        const descHeaders = document.querySelectorAll('th.sort-desc');
+        if (ascHeaders.length + descHeaders.length > 1) {
+            log('ERROR: Multiple headers have sort indicators:');
+            ascHeaders.forEach(header => {
+                log(`- ${header.textContent} (asc)`);
+            });
+            descHeaders.forEach(header => {
+                log(`- ${header.textContent} (desc)`);
+            });
+        }
+    }, 1000);
+});
+</script>
 </body>
 </html>
