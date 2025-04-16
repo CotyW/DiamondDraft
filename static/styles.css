@@ -237,6 +237,31 @@ tr:hover {
     font-size: 0.9rem;
 }
 
+/* Center the footer and its content */
+footer {
+    text-align: center;
+    margin-top: 20px;
+    padding: 10px;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+/* Add sorting indicator styles */
+th.sort-asc::after {
+    content: " ▲";
+    color: var(--primary);
+}
+
+th.sort-desc::after {
+    content: " ▼";
+    color: var(--primary);
+}
+
+/* Add pointer cursor to sortable headers */
+th[data-sort] {
+    cursor: pointer;
+}
+
 /* Hide columns based on filter selection */
 .hide-column {
     display: none;

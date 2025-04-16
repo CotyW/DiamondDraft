@@ -64,6 +64,11 @@ document.addEventListener('DOMContentLoaded', function() {
         th.addEventListener('click', function() {
             const column = this.dataset.sort;
             
+            // Clear previous sort indicators
+            playersTable.querySelectorAll('th').forEach(header => {
+                header.classList.remove('sort-asc', 'sort-desc');
+            });
+            
             // If clicking the same column, reverse the direction
             if (currentSort.column === column) {
                 currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
@@ -71,6 +76,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 currentSort.column = column;
                 currentSort.direction = 'desc'; // Default to descending
             }
+            
+            // Add sort indicator to the clicked header
+            this.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
             
             sortAndDisplayPlayers();
         });
@@ -116,10 +124,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Get the correct stats based on year and data type
             let stats;
-            if (currentYear === '2025' && dataType === 'projected') {
-                stats = playerCopy.stats_2025_projected;
-            } else if (currentYear === '2025' && dataType === 'actual') {
-                stats = playerCopy.stats_2025_actual;
+            if (currentYear === '2025') {
+                stats = playerCopy.stats_2025;  // Use stats_2025 directly
             } else {
                 stats = playerCopy.stats_2024;
             }
@@ -232,20 +238,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Get the correct stats based on year and data type
                 let aStats, bStats;
                 
-                if (currentYear === '2025' && dataType === 'projected') {
-                    aStats = a.stats_2025_projected;
-                    bStats = b.stats_2025_projected;
-                } else if (currentYear === '2025' && dataType === 'actual') {
-                    aStats = a.stats_2025_actual;
-                    bStats = b.stats_2025_actual;
+                if (currentYear === '2025') {
+                    aStats = a.stats_2025;
+                    bStats = b.stats_2025;
                 } else {
                     aStats = a.stats_2024;
                     bStats = b.stats_2024;
                 }
                 
-                aValue = aStats[currentSort.column];
-                bValue = bStats[currentSort.column];
+                aValue = aStats ? aStats[currentSort.column] : 0;
+                bValue = bStats ? bStats[currentSort.column] : 0;
             }
+            
+            // Null/undefined check
+            if (aValue === null || aValue === undefined) aValue = 0;
+            if (bValue === null || bValue === undefined) bValue = 0;
             
             // Handle special cases for sorting
             if (currentSort.column === 'era' && aValue > 0 && bValue > 0) {
@@ -283,10 +290,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Get the correct stats based on year and data type
             let stats;
-            if (currentYear === '2025' && dataType === 'projected') {
-                stats = player.stats_2025_projected;
-            } else if (currentYear === '2025' && dataType === 'actual') {
-                stats = player.stats_2025_actual;
+            if (currentYear === '2025') {
+                stats = player.stats_2025;
             } else {
                 stats = player.stats_2024;
             }
