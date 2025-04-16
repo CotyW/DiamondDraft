@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Get the correct stats based on year and data type
             let stats;
             if (currentYear === '2025') {
-                stats = playerCopy.stats_2025;  // Use stats_2025 directly
+                stats = dataType === 'actual' ? playerCopy.stats_2025_actual : playerCopy.stats_2025_projected;
             } else {
                 stats = playerCopy.stats_2024;
             }
@@ -239,8 +239,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 let aStats, bStats;
                 
                 if (currentYear === '2025') {
-                    aStats = a.stats_2025;
-                    bStats = b.stats_2025;
+                    aStats = dataType === 'actual' ? a.stats_2025_actual : a.stats_2025_projected;
+                    bStats = dataType === 'actual' ? b.stats_2025_actual : b.stats_2025_projected;
                 } else {
                     aStats = a.stats_2024;
                     bStats = b.stats_2024;
@@ -291,7 +291,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Get the correct stats based on year and data type
             let stats;
             if (currentYear === '2025') {
-                stats = player.stats_2025;
+                stats = dataType === 'actual' ? player.stats_2025_actual : player.stats_2025_projected;
             } else {
                 stats = player.stats_2024;
             }
