@@ -267,6 +267,49 @@ th[data-sort] {
     display: none;
 }
 
+/* Make sortable headers more visually distinct */
+th[data-sort] {
+    cursor: pointer;
+    position: relative;
+    padding-right: 20px; /* Space for the arrow */
+}
+
+th[data-sort]:hover {
+    background-color: #bbdefb;
+}
+
+/* Clear and visible sorting indicators */
+th.sort-asc::after,
+th.sort-desc::after {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 16px;
+    font-weight: bold;
+}
+
+th.sort-asc::after {
+    content: "▲";
+    color: var(--primary);
+}
+
+th.sort-desc::after {
+    content: "▼";
+    color: var(--primary);
+}
+
+/* Add a subtle highlight to the sorted column */
+th.sort-asc,
+th.sort-desc {
+    background-color: #e3f2fd;
+}
+
+/* Add a subtle highlight to the currently sorted column's cells */
+.sorted-column {
+    background-color: rgba(33, 150, 243, 0.05);
+}
+
 /* Additional styles for responsive column headers */
 @media (max-width: 768px) {
     th.batting-stat.hide-column,

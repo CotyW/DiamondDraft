@@ -59,9 +59,20 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Table header sorting
-    playersTable.querySelectorAll('th[data-sort]').forEach(th => {
-        th.addEventListener('click', function() {
+    // Table header sorting - improved with debugging
+    const sortableHeaders = playersTable.querySelectorAll('th[data-sort]');
+    console.log(`Found ${sortableHeaders.length} sortable headers`);
+    
+    sortableHeaders.forEach(th => {
+        // Add visual indicator that header is clickable
+        th.style.cursor = 'pointer';
+        
+        // Clean up and re-add event listener to prevent duplicates
+        const oldTh = th.cloneNode(true);
+        th.parentNode.replaceChild(oldTh, th);
+        
+        oldTh.addEventListener('click', function() {
+            console.log(`Sorting by: ${this.dataset.sort}`);
             const column = this.dataset.sort;
             
             // Clear previous sort indicators
@@ -77,12 +88,40 @@ document.addEventListener('DOMContentLoaded', function() {
                 currentSort.direction = 'desc'; // Default to descending
             }
             
+            console.log(`Sort direction: ${currentSort.direction}`);
+            
             // Add sort indicator to the clicked header
             this.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+            
+            // Force browser to recognize style changes (sometimes needed)
+            this.offsetHeight;
             
             sortAndDisplayPlayers();
         });
     });
+    
+    // Helper function to get the index of the currently sorted column
+    function getSortColumnIndex(columnName) {
+        // Map column names to their index in the table
+        const columnMap = {
+            'name': 0,
+            'team': 1,
+            'position': 2,
+            'avg': 3,
+            'runs': 4,
+            'rbi': 5,
+            'steals': 6,
+            'hr': 7,
+            'wins': 8,
+            'era': 9,
+            'strikeouts': 10,
+            'walks': 11,
+            'saves': 12,
+            'points': 13
+        };
+        
+        return columnMap[columnName] !== undefined ? columnMap[columnName] : -1;
+    }
     
     // Functions
     async function loadData() {
@@ -242,7 +281,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function sortPlayers(players) {
-        players.sort((a, b) => {
+        console.log(`Sorting ${players.length} players by ${currentSort.column} (${currentSort.direction})`);
+        
+        // Create a copy to avoid modifying the original array
+        const sortedPlayers = [...players];
+        
+        sortedPlayers.sort((a, b) => {
             let aValue, bValue;
             
             if (currentSort.column === 'name' || currentSort.column === 'team' || currentSort.column === 'position') {
@@ -282,6 +326,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (aValue === null || aValue === undefined) aValue = 0;
             if (bValue === null || bValue === undefined) bValue = 0;
             
+            // Log a few examples of the sorting values (avoid flooding the console)
+            if (Math.random() < 0.01) {
+                console.log(`Sorting example: ${a.name} (${aValue}) vs ${b.name} (${bValue})`);
+            }
+            
             // Handle special cases for sorting
             if (currentSort.column === 'era' && aValue > 0 && bValue > 0) {
                 // For ERA, lower is better, so reverse the comparison
@@ -290,19 +339,37 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Standard sorting
+            let result;
             if (typeof aValue === 'string') {
-                return currentSort.direction === 'asc' ? 
+                result = currentSort.direction === 'asc' ? 
                     aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
             } else {
-                return currentSort.direction === 'asc' ? 
+                result = currentSort.direction === 'asc' ? 
                     aValue - bValue : bValue - aValue;
             }
+            
+            return result;
         });
+        
+        // Replace the original array content with the sorted content
+        // This ensures the displayed players are updated
+        while (players.length) players.pop();
+        sortedPlayers.forEach(player => players.push(player));
+        
+        console.log('Sorting complete');
+        return players;
     }
     
     function sortAndDisplayPlayers() {
+        console.log('Running sortAndDisplayPlayers');
         sortPlayers(displayedPlayers);
         renderPlayersTable(displayedPlayers);
+        
+        // Add visual indicator for the current sort column
+        const currentSortHeader = document.querySelector(`th[data-sort="${currentSort.column}"]`);
+        if (currentSortHeader) {
+            currentSortHeader.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+        }
     }
     
     function renderPlayersTable(playersData) {
@@ -358,6 +425,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td class="pitching-stat">${stats.saves || 0}</td>
                 <td class="points-column">${player.points || 0}</td>
             `;
+            
+            // Highlight the sorted column for better visibility
+            const sortColumnIndex = getSortColumnIndex(currentSort.column);
+            if (sortColumnIndex !== -1) {
+                const cells = row.querySelectorAll('td');
+                if (cells[sortColumnIndex]) {
+                    cells[sortColumnIndex].classList.add('sorted-column');
+                }
+            }
             
             // Apply hide-column class based on filter
             if (filterValue === 'batter') {
