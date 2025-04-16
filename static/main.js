@@ -130,27 +130,44 @@ document.addEventListener('DOMContentLoaded', function() {
                 stats = playerCopy.stats_2024;
             }
             
+            // Make sure stats object exists with proper defaults
+            if (!stats) {
+                console.warn(`Stats missing for player: ${player.name}, year: ${currentYear}, type: ${dataType}`);
+                stats = {
+                    avg: 0,
+                    runs: 0,
+                    rbi: 0,
+                    steals: 0,
+                    hr: 0,
+                    wins: 0,
+                    era: 0,
+                    strikeouts: 0,
+                    walks: 0,
+                    saves: 0
+                };
+            }
+            
             let points = 0;
             
             // Calculate points based on weights
             if (!player.is_pitcher) {  // Batter
-                points += stats.avg * weights.avg;
-                points += stats.runs * weights.runs;
-                points += stats.rbi * weights.rbi;
-                points += stats.steals * weights.steals;
-                points += stats.hr * weights.hr;
+                points += (stats.avg || 0) * weights.avg;
+                points += (stats.runs || 0) * weights.runs;
+                points += (stats.rbi || 0) * weights.rbi;
+                points += (stats.steals || 0) * weights.steals;
+                points += (stats.hr || 0) * weights.hr;
             } else {  // Pitcher
-                points += stats.wins * weights.wins;
+                points += (stats.wins || 0) * weights.wins;
                 // For ERA, lower is better, so we invert the weight
                 if (weights.era !== 0) {
-                    points += (5.0 - stats.era) * weights.era;  // 5.0 is a baseline ERA
+                    points += (5.0 - (stats.era || 0)) * weights.era;  // 5.0 is a baseline ERA
                 }
-                points += stats.strikeouts * weights.strikeouts;
+                points += (stats.strikeouts || 0) * weights.strikeouts;
                 // For walks, lower is better, so we invert the weight
                 if (weights.walks !== 0) {
-                    points += (100 - stats.walks) * weights.walks / 100;  // Normalize walks
+                    points += (100 - (stats.walks || 0)) * weights.walks / 100;  // Normalize walks
                 }
-                points += stats.saves * weights.saves;
+                points += (stats.saves || 0) * weights.saves;
             }
             
             // Add points to the result
@@ -229,11 +246,11 @@ document.addEventListener('DOMContentLoaded', function() {
             let aValue, bValue;
             
             if (currentSort.column === 'name' || currentSort.column === 'team' || currentSort.column === 'position') {
-                aValue = a[currentSort.column];
-                bValue = b[currentSort.column];
+                aValue = a[currentSort.column] || '';
+                bValue = b[currentSort.column] || '';
             } else if (currentSort.column === 'points') {
-                aValue = a.points;
-                bValue = b.points;
+                aValue = a.points || 0;
+                bValue = b.points || 0;
             } else {
                 // Get the correct stats based on year and data type
                 let aStats, bStats;
@@ -246,8 +263,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     bStats = b.stats_2024;
                 }
                 
-                aValue = aStats ? aStats[currentSort.column] : 0;
-                bValue = bStats ? bStats[currentSort.column] : 0;
+                // Handle missing stats objects
+                if (!aStats) {
+                    aStats = {};
+                    console.warn(`Missing stats for sorting: ${a.name}, year: ${currentYear}, type: ${dataType}`);
+                }
+                
+                if (!bStats) {
+                    bStats = {};
+                    console.warn(`Missing stats for sorting: ${b.name}, year: ${currentYear}, type: ${dataType}`);
+                }
+                
+                aValue = aStats[currentSort.column] || 0;
+                bValue = bStats[currentSort.column] || 0;
             }
             
             // Null/undefined check
@@ -296,22 +324,39 @@ document.addEventListener('DOMContentLoaded', function() {
                 stats = player.stats_2024;
             }
             
-            // Add cells
+            // Make sure stats object exists with proper defaults
+            if (!stats) {
+                console.warn(`Stats missing for player: ${player.name}, year: ${currentYear}, type: ${dataType}`);
+                stats = {
+                    avg: 0,
+                    runs: 0,
+                    rbi: 0,
+                    steals: 0,
+                    hr: 0,
+                    wins: 0,
+                    era: 0,
+                    strikeouts: 0,
+                    walks: 0,
+                    saves: 0
+                };
+            }
+            
+            // Add cells with safe access to properties
             row.innerHTML = `
-                <td>${player.name}</td>
-                <td>${player.team}</td>
-                <td>${player.position}</td>
-                <td class="batting-stat">${stats.avg.toFixed(3)}</td>
-                <td class="batting-stat">${stats.runs}</td>
-                <td class="batting-stat">${stats.rbi}</td>
-                <td class="batting-stat">${stats.steals}</td>
-                <td class="batting-stat">${stats.hr}</td>
-                <td class="pitching-stat">${stats.wins}</td>
-                <td class="pitching-stat">${stats.era.toFixed(2)}</td>
-                <td class="pitching-stat">${stats.strikeouts}</td>
-                <td class="pitching-stat">${stats.walks}</td>
-                <td class="pitching-stat">${stats.saves}</td>
-                <td class="points-column">${player.points}</td>
+                <td>${player.name || ''}</td>
+                <td>${player.team || ''}</td>
+                <td>${player.position || ''}</td>
+                <td class="batting-stat">${(stats.avg || 0).toFixed(3)}</td>
+                <td class="batting-stat">${stats.runs || 0}</td>
+                <td class="batting-stat">${stats.rbi || 0}</td>
+                <td class="batting-stat">${stats.steals || 0}</td>
+                <td class="batting-stat">${stats.hr || 0}</td>
+                <td class="pitching-stat">${stats.wins || 0}</td>
+                <td class="pitching-stat">${(stats.era || 0).toFixed(2)}</td>
+                <td class="pitching-stat">${stats.strikeouts || 0}</td>
+                <td class="pitching-stat">${stats.walks || 0}</td>
+                <td class="pitching-stat">${stats.saves || 0}</td>
+                <td class="points-column">${player.points || 0}</td>
             `;
             
             // Apply hide-column class based on filter
