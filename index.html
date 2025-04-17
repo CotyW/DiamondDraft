@@ -4,13 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DiamondDraft - Baseball Stats Calculator</title>
-    <link rel="stylesheet" href="/DiamondDraft/static/styles2.css">
-    <meta name="description" content="Calculate and compare baseball player values for fantasy drafts based on customizable scoring metrics">
+    <link rel="stylesheet" href="/DiamondDraft/static/modern-styles-v2.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
+    <meta name="description" content="Calculate and compare baseball player values for fantasy drafts">
 </head>
 <body>
     <div class="container">
-        <h1>DiamondDraft</h1>
-        <p class="tagline">Baseball Player Value Calculator</p>
+        <header class="site-header">
+            <div class="logo-container">
+                <img src="/DiamondDraft/static/DDlogo.png" alt="DiamondDraft Logo" class="logo">
+            </div>
+            <div class="title-container">
+                <h1>DiamondDraft</h1>
+                <p class="tagline">Baseball Player Value Calculator</p>
+            </div>
+        </header>
         
         <div class="controls">
             <div class="scoring-section">
@@ -20,41 +30,41 @@
                         <h3>Batting</h3>
                         <div class="input-group">
                             <label for="avg">AVG:</label>
-                            <input type="number" id="avg" value="1" step="0.1">
+                            <input type="number" id="avg" value="300" step="1">
                         </div>
                         <div class="input-group">
                             <label for="runs">Runs:</label>
-                            <input type="number" id="runs" value="1" step="0.1">
+                            <input type="number" id="runs" value="5" step="0.1">
                         </div>
                         <div class="input-group">
                             <label for="rbi">RBI:</label>
-                            <input type="number" id="rbi" value="1" step="0.1">
+                            <input type="number" id="rbi" value="5" step="0.1">
                         </div>
                         <div class="input-group">
                             <label for="steals">Steals:</label>
-                            <input type="number" id="steals" value="1" step="0.1">
+                            <input type="number" id="steals" value="5" step="0.1">
                         </div>
                         <div class="input-group">
                             <label for="hr">HRs:</label>
-                            <input type="number" id="hr" value="1" step="0.1">
+                            <input type="number" id="hr" value="10" step="0.1">
                         </div>
                     </div>
                     <div class="weight-column">
                         <h3>Pitching</h3>
                         <div class="input-group">
                             <label for="wins">Wins:</label>
-                            <input type="number" id="wins" value="5" step="0.1">
+                            <input type="number" id="wins" value="7" step="0.1">
                         </div>
                         <div class="input-group">
                             <label for="era">ERA:</label>
-                            <input type="number" id="era" value="1" step="0.1">
+                            <input type="number" id="era" value="15" step="0.1">
                         </div>
                         <div class="input-group">
-                            <label for="strikeouts">Ks:</label>
+                            <label for="strikeouts">K's:</label>
                             <input type="number" id="strikeouts" value="1" step="0.1">
                         </div>
                         <div class="input-group">
-                            <label for="walks">BBs:</label>
+                            <label for="walks">BB's:</label>
                             <input type="number" id="walks" value="-1" step="0.1">
                         </div>
                         <div class="input-group">
@@ -77,7 +87,7 @@
                 </div>
                 
                 <div class="filter-section">
-                    <label for="position-filter">Filter by Position:</label>
+                    <label for="position-filter">Filter:</label>
                     <select id="position-filter">
                         <option value="all">All Players</option>
                         <option value="batter">Batters Only</option>
@@ -87,7 +97,7 @@
                 
                 <div class="search-section">
                     <label for="player-search">Search:</label>
-                    <input type="text" id="player-search" placeholder="Player name...">
+                    <input type="text" id="player-search" placeholder="Player name or team...">
                 </div>
             </div>
         </div>
@@ -115,7 +125,7 @@
                         </tr>
                     </thead>
                     <tbody id="players-body">
-                        <!-- Player data will be populated here -->
+                        <!-- Data will be populated by JavaScript -->
                     </tbody>
                 </table>
             </div>
@@ -124,15 +134,12 @@
         <div class="data-info">
             <div id="data-timestamp">Last updated: Loading...</div>
         </div>
-        
-        <div class="footer">
-            <p>DiamondDraft - Fantasy Baseball Value Calculator</p>
-            <p><small>Data sourced from MLB Stats API. Updated daily.</small></p>
-        </div>
     </div>
+
     <footer>
+        <p>DiamondDraft - Fantasy Baseball Value Calculator</p>
+        <p><small>Data sourced from MLB Stats API. Updated daily.</small></p>
         <p>For inquiries, please reach out to the developer at <a href="mailto:coty1283@gmail.com">coty1283@gmail.com</a></p>
-        <p>To support the creator, click the cup and "Buy me a coffee".</p>
     </footer>
     
     <!-- Buy Me a Coffee Widget -->
@@ -143,7 +150,7 @@
         data-id="coty"
         data-description="Support me on Buy me a coffee!"
         data-message="Thanks for visiting DiamondDraft! I am new to development, so updates will come slow, but I WILL be actively updating this page with more features. If you'd like to support this page, feel free to buy me a beer!"
-        data-color="#5F7FFF"
+        data-color="#1B57C4"
         data-position="Right"
         data-x_margin="18"
         data-y_margin="18">
