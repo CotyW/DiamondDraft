@@ -29,24 +29,24 @@
                     <div class="weight-column">
                         <h3>Batting</h3>
                         <div class="input-group">
-                            <label for="avg">AVG:</label>
-                            <input type="number" id="avg" value="300" step="1">
+                            <label for="hits">Hits:</label>
+                            <input type="number" id="hits" value="1" step="0.1">
                         </div>
                         <div class="input-group">
                             <label for="runs">Runs:</label>
-                            <input type="number" id="runs" value="5" step="0.1">
+                            <input type="number" id="runs" value="1" step="0.1">
                         </div>
                         <div class="input-group">
                             <label for="rbi">RBI:</label>
-                            <input type="number" id="rbi" value="5" step="0.1">
+                            <input type="number" id="rbi" value="1" step="0.1">
                         </div>
                         <div class="input-group">
                             <label for="steals">Steals:</label>
-                            <input type="number" id="steals" value="5" step="0.1">
+                            <input type="number" id="steals" value="1" step="0.1">
                         </div>
                         <div class="input-group">
                             <label for="hr">HRs:</label>
-                            <input type="number" id="hr" value="10" step="0.1">
+                            <input type="number" id="hr" value="1" step="0.1">
                         </div>
                     </div>
                     <div class="weight-column">
@@ -56,15 +56,15 @@
                             <input type="number" id="wins" value="7" step="0.1">
                         </div>
                         <div class="input-group">
-                            <label for="era">ERA:</label>
-                            <input type="number" id="era" value="15" step="0.1">
+                            <label for="runs_scored">Runs:</label>
+                            <input type="number" id="runs_scored" value="1" step="0.1">
                         </div>
                         <div class="input-group">
-                            <label for="strikeouts">K's:</label>
+                            <label for="strikeouts">Ks:</label>
                             <input type="number" id="strikeouts" value="1" step="0.1">
                         </div>
                         <div class="input-group">
-                            <label for="walks">BB's:</label>
+                            <label for="walks">BBs:</label>
                             <input type="number" id="walks" value="-1" step="0.1">
                         </div>
                         <div class="input-group">
@@ -111,15 +111,19 @@
                             <th data-sort="name">Player Name</th>
                             <th data-sort="team">Team</th>
                             <th data-sort="position">Position</th>
+                            <th class="batting-stat" data-sort="hits">Hits</th>
                             <th class="batting-stat" data-sort="avg">AVG</th>
+                            <th class="batting-stat" data-sort="babip">BABIP</th>
                             <th class="batting-stat" data-sort="runs">Runs</th>
                             <th class="batting-stat" data-sort="rbi">RBI</th>
                             <th class="batting-stat" data-sort="steals">Steals</th>
                             <th class="batting-stat" data-sort="hr">HRs</th>
                             <th class="pitching-stat" data-sort="wins">Wins</th>
+                            <th class="pitching-stat" data-sort="runs_scored">Runs</th>
                             <th class="pitching-stat" data-sort="era">ERA</th>
-                            <th class="pitching-stat" data-sort="strikeouts">K's</th>
-                            <th class="pitching-stat" data-sort="walks">BB's</th>
+                            <th class="pitching-stat" data-sort="fip">FIP</th>
+                            <th class="pitching-stat" data-sort="strikeouts">Ks</th>
+                            <th class="pitching-stat" data-sort="walks">BBs</th>
                             <th class="pitching-stat" data-sort="saves">Saves</th>
                             <th data-sort="points" class="points-column">Points</th>
                         </tr>
