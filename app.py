@@ -1,9 +1,9 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from database import db, Player
 import fetch_data
 import os
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates', static_folder='static')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///baseball_stats.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -62,6 +62,10 @@ def calculate_points():
 def refresh_data():
     success = fetch_data.fetch_players_data()
     return jsonify({'success': success})
+
+@app.route('/data/<path:filename>')
+def data_files(filename):
+    return send_from_directory('data', filename)
 
 if __name__ == '__main__':
     # Create the database if it doesn't exist
