@@ -145,13 +145,13 @@ document.addEventListener('DOMContentLoaded', function() {
             let dataFile;
             switch(filter) {
                 case 'batter':
-                    dataFile = '/data/batters.json';
+                    dataFile = './data/batters.json';
                     break;
                 case 'pitcher':
-                    dataFile = '/data/pitchers.json';
+                    dataFile = './data/pitchers.json';
                     break;
                 default:
-                    dataFile = '/data/players.json';
+                    dataFile = './data/players.json';
             }
             
             // Fetch player data
@@ -159,7 +159,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!response.ok) {
                 // If separated files don't exist, fall back to combined file
                 console.warn(`Could not load ${dataFile}, falling back to players.json`);
-                const fallbackResponse = await fetch('/data/players.json');
+                const fallbackResponse = await fetch('./data/players.json');
                 allPlayers = await fallbackResponse.json();
                 
                 // Filter the data manually if we're using the fallback
@@ -173,7 +173,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Fetch last updated timestamp
-            const timestampResponse = await fetch('/data/last_updated.json');
+            const timestampResponse = await fetch('./data/last_updated.json');
             const timestampData = await timestampResponse.json();
             
             // Format and display timestamp

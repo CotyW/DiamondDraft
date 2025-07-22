@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DiamondDraft - Baseball Stats Calculator</title>
+    <link rel="stylesheet" href="static/styles2.css">
+    <link rel="stylesheet" href="static/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
+    <meta name="description" content="Calculate and compare baseball player values for fantasy drafts">
+</head>
+<body>
+    <div class="container">
+        <header class="site-header">
+            <div class="logo-container">
+                <img src="static/DDlogo2.png" alt="DiamondDraft Logo" class="logo">
+            </div>
+            <div class="title-container">
+                <h1>DiamondDraft</h1>
+                <p class="tagline">Baseball Player Value Calculator</p>
+            </div>
+        </header>
+        
+        <div class="controls">
+            <div class="scoring-section">
+                <h2>Scoring Weights</h2>
+                <div class="weight-inputs">
+                    <div class="weight-column">
+                        <h3>Batting</h3>
+                        <div class="input-group">
+                            <label for="hits">Hits:</label>
+                            <input type="number" id="hits" value="1" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="runs">Runs:</label>
+                            <input type="number" id="runs" value="1" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="rbi">RBI:</label>
+                            <input type="number" id="rbi" value="1" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="steals">Steals:</label>
+                            <input type="number" id="steals" value="1" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="hr">HRs:</label>
+                            <input type="number" id="hr" value="1" step="0.1">
+                        </div>
+                    </div>
+                    <div class="weight-column">
+                        <h3>Pitching</h3>
+                        <div class="input-group">
+                            <label for="wins">Wins:</label>
+                            <input type="number" id="wins" value="7" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="runs_scored">Runs:</label>
+                            <input type="number" id="runs_scored" value="1" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="strikeouts">Ks:</label>
+                            <input type="number" id="strikeouts" value="1" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="walks">BBs:</label>
+                            <input type="number" id="walks" value="-1" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="saves">Saves:</label>
+                            <input type="number" id="saves" value="3" step="0.1">
+                        </div>
+                    </div>
+                </div>
+                <button id="calculate-btn">Calculate Player Values</button>
+            </div>
+            
+            <div class="options-row">
+                <div class="year-toggle">
+                    <label>Stats Year:</label>
+                    <div class="toggle-buttons">
+                        <button class="year-btn active" data-year="2024">2024 Actual</button>
+                        <button class="year-btn" data-year="2025_projected">2025 Projected</button>
+                        <button class="year-btn" data-year="2025_actual">2025 Actual</button>
+                    </div>
+                </div>
+                
+                <div class="filter-section">
+                    <label for="position-filter">Filter:</label>
+                    <select id="position-filter">
+                        <option value="all">All Players</option>
+                        <option value="batter">Batters Only</option>
+                        <option value="pitcher">Pitchers Only</option>
+                    </select>
+                </div>
+                
+                <div class="search-section">
+                    <label for="player-search">Search:</label>
+                    <input type="text" id="player-search" placeholder="Player name or team...">
+                </div>
+            </div>
+        </div>
+        
+        <div class="results-section">
+            <h2>Player Rankings</h2>
+            <div class="table-container">
+                <table id="players-table">
+                    <thead>
+                        <tr>
+                            <th data-sort="name">Player Name</th>
+                            <th data-sort="team">Team</th>
+                            <th data-sort="position">Position</th>
+                            <th class="batting-stat" data-sort="hits">Hits</th>
+                            <th class="batting-stat" data-sort="avg">AVG</th>
+                            <th class="batting-stat" data-sort="babip">BABIP</th>
+                            <th class="batting-stat" data-sort="runs">Runs</th>
+                            <th class="batting-stat" data-sort="rbi">RBI</th>
+                            <th class="batting-stat" data-sort="steals">Steals</th>
+                            <th class="batting-stat" data-sort="hr">HRs</th>
+                            <th class="pitching-stat" data-sort="wins">Wins</th>
+                            <th class="pitching-stat" data-sort="runs_scored">Runs</th>
+                            <th class="pitching-stat" data-sort="era">ERA</th>
+                            <th class="pitching-stat" data-sort="fip">FIP</th>
+                            <th class="pitching-stat" data-sort="strikeouts">Ks</th>
+                            <th class="pitching-stat" data-sort="walks">BBs</th>
+                            <th class="pitching-stat" data-sort="saves">Saves</th>
+                            <th data-sort="points" class="points-column">Points</th>
+                            <th>Select</th>
+                        </tr>
+                    </thead>
+                    <tbody id="players-body">
+                        <!-- Data will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="data-info">
+            <div id="data-timestamp">Last updated: Loading...</div>
+        </div>
+    </div>
+
+    <footer>
+        <p>DiamondDraft - Fantasy Baseball Value Calculator</p>
+        <p><small>Data sourced from MLB Stats API. Updated daily.</small></p>
+        <p>For inquiries, please reach out to the developer at <a href="mailto:coty1283@gmail.com">coty1283@gmail.com</a></p>
+    </footer>
+    
+    <!-- Buy Me a Coffee Widget
+    <script 
+        data-name="BMC-Widget"
+        data-cfasync="false"
+        src="https://cdnjs.buymeacoffee.com/1.0.0/widget.prod.min.js"
+        data-id="coty"
+        data-description="Support me on Buy me a coffee!"
+        data-message="Thanks for visiting DiamondDraft! I am new to development, so updates will come slow, but I WILL be actively updating this page with more features. If you'd like to support this page, feel free to buy me a beer!"
+        data-color="#1B57C4"
+        data-position="Right"
+        data-x_margin="18"
+        data-y_margin="18">
+    </script> -->
+    
+    <!-- Main JavaScript -->
+    <script src="static/main.js"></script>
+    <script src="static/player-comparison.js"></script>
+    
+    <!-- Player Card Modal -->
+    <div id="player-card-modal" class="modal">
+        <div class="modal-content player-card-content">
+            <span class="close-btn" onclick="closePlayerCard()">&times;</span>
+            <div id="player-card-container">
+                <!-- Player card content will be dynamically added here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Comparison Tool Modal -->
+    <div id="comparison-tool" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeComparisonTool()">&times;</span>
+            <h2>Player Comparison</h2>
+            <div id="comparison-container">
+                <!-- Player comparison cards will be dynamically added here -->
+            </div>
+        </div>
+    </div>
+</body>
+</html>

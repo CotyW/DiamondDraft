@@ -13,6 +13,9 @@ DiamondDraft is a web application for calculating and comparing baseball player 
 ## How It Works
 DiamondDraft is a static web application hosted on GitHub Pages. Player data is automatically updated daily from the MLB Stats API using GitHub Actions. All calculations are performed client-side in your browser.
 
+## Live Demo
+Visit the live application: [https://CotyW.github.io/DiamondDraft](https://CotyW.github.io/DiamondDraft)
+
 ### Data Updates
 Player statistics are updated daily at 5:00 UTC through an automated GitHub Action. This ensures you always have access to the latest player data without any manual intervention.
 
