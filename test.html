@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DiamondDraft Test</title>
+</head>
+<body>
+    <h1>Testing DiamondDraft Data Loading</h1>
+    <div id="test-results"></div>
+    
+    <script>
+        async function testDataLoading() {
+            const results = document.getElementById('test-results');
+            
+            try {
+                // Test data file loading
+                const response = await fetch('./data/players.json');
+                if (response.ok) {
+                    const data = await response.json();
+                    results.innerHTML += `<p>✅ Successfully loaded players.json with ${data.length} players</p>`;
+                } else {
+                    results.innerHTML += `<p>❌ Failed to load players.json: ${response.status}</p>`;
+                }
+                
+                // Test timestamp file
+                const timestampResponse = await fetch('./data/last_updated.json');
+                if (timestampResponse.ok) {
+                    const timestampData = await timestampResponse.json();
+                    results.innerHTML += `<p>✅ Successfully loaded timestamp: ${timestampData.timestamp}</p>`;
+                } else {
+                    results.innerHTML += `<p>❌ Failed to load timestamp</p>`;
+                }
+                
+            } catch (error) {
+                results.innerHTML += `<p>❌ Error: ${error.message}</p>`;
+            }
+        }
+        
+        // Run test when page loads
+        testDataLoading();
+    </script>
+</body>
+</html>
