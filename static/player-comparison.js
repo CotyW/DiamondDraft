@@ -6,37 +6,50 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!playersTable || !playersBody) return;
 
     // Show comparison modal with enhanced stat differences
-    window.showComparisonModal = function(rows) {
+    window.showComparisonModal = function(playerIds, allPlayersData, currentYear) {
         const modal = document.getElementById('comparison-tool');
         const container = document.getElementById('comparison-container');
         container.innerHTML = '';
         
-        // Extract player data from both rows
-        const players = rows.map(row => {
-            const cells = row.querySelectorAll('td');
+        // Get player data from allPlayersData array based on IDs
+        const players = playerIds.map(playerId => {
+            const player = allPlayersData.find(p => String(p.player_id) === String(playerId) || String(p.id) === String(playerId));
+            if (!player) return null;
+            
+            // Get stats for current year
+            const seasonStats = player.stats_by_season ? player.stats_by_season[currentYear] : null;
+            const battingStats = seasonStats ? seasonStats.batting : {};
+            const pitchingStats = seasonStats ? seasonStats.pitching : {};
+            
             return {
-                name: cells[0]?.textContent?.replace(/^\s*|\s*$/g, '') || '',
-                team: cells[1]?.textContent || '',
-                position: cells[2]?.textContent || '',
+                name: player.name || '',
+                team: player.team || '',
+                position: player.position || '',
                 stats: {
-                    hits: parseFloat(cells[3]?.textContent || '0'),
-                    avg: parseFloat(cells[4]?.textContent || '0'),
-                    babip: parseFloat(cells[5]?.textContent || '0'),
-                    runs: parseFloat(cells[6]?.textContent || '0'),
-                    rbi: parseFloat(cells[7]?.textContent || '0'),
-                    steals: parseFloat(cells[8]?.textContent || '0'),
-                    hr: parseFloat(cells[9]?.textContent || '0'),
-                    wins: parseFloat(cells[10]?.textContent || '0'),
-                    runs_scored: parseFloat(cells[11]?.textContent || '0'),
-                    era: parseFloat(cells[12]?.textContent || '0'),
-                    fip: parseFloat(cells[13]?.textContent || '0'),
-                    strikeouts: parseFloat(cells[14]?.textContent || '0'),
-                    walks: parseFloat(cells[15]?.textContent || '0'),
-                    saves: parseFloat(cells[16]?.textContent || '0'),
-                    points: parseFloat(cells[17]?.textContent || '0')
+                    hits: battingStats.hits || 0,
+                    avg: battingStats.avg || 0,
+                    babip: 0, // Not in Supabase yet
+                    runs: battingStats.runs || 0,
+                    rbi: battingStats.rbi || 0,
+                    steals: battingStats.steals || 0,
+                    hr: battingStats.hr || 0,
+                    wins: pitchingStats.wins || 0,
+                    runs_scored: pitchingStats.era || 0, // Using ERA as proxy
+                    era: pitchingStats.era || 0,
+                    fip: 0, // Not in Supabase yet
+                    strikeouts: pitchingStats.strikeouts || 0,
+                    walks: pitchingStats.walks || 0,
+                    saves: pitchingStats.saves || 0,
+                    points: player.points || 0
                 }
             };
-        });
+        }).filter(p => p !== null);
+        
+        if (players.length < 2) {
+            container.innerHTML = '<p>Unable to load player data for comparison.</p>';
+            modal.style.display = 'block';
+            return;
+        }
 
         // Helper function to compare stats and return formatted string with difference
         function compareStats(statName, player1Value, player2Value, lowerIsBetter = false) {

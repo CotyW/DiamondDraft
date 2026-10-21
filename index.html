@@ -6,10 +6,13 @@
     <title>DiamondDraft - Baseball Stats Calculator</title>
     <link rel="stylesheet" href="static/styles2.css">
     <link rel="stylesheet" href="static/styles.css">
+    <link rel="stylesheet" href="static/analysis.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
     <meta name="description" content="Calculate and compare baseball player values for fantasy drafts">
+    <!-- Supabase JS library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
     <div class="container">
@@ -20,6 +23,9 @@
             <div class="title-container">
                 <h1>DiamondDraft</h1>
                 <p class="tagline">Baseball Player Value Calculator</p>
+            </div>
+            <div class="login-container">
+                <button id="login-btn" class="login-btn" aria-label="Open login modal">Login</button>
             </div>
         </header>
         
@@ -76,42 +82,126 @@
                 </div>
                 <button id="calculate-btn">Calculate Player Values</button>
             </div>
+        </div>
+    </div>
+    
+    <div class="results-section">
+            <h2>Player Rankings</h2>
             
             <div class="options-row">
                 <div class="year-toggle">
                     <label>Stats Year:</label>
                     <div class="toggle-buttons">
-                        <button class="year-btn active" data-year="2024">2024 Actual</button>
-                        <button class="year-btn" data-year="2025_projected">2025 Projected</button>
-                        <button class="year-btn" data-year="2025_actual">2025 Actual</button>
+                        <button class="year-btn active" data-year="2024" aria-label="Show 2024 stats">2024</button>
+                        <button class="year-btn" data-year="2025_actual" aria-label="Show 2025 stats">2025</button>
+                        <button class="year-btn" data-year="2026_actual" aria-label="Show 2026 stats">2026</button>
+                        <button class="year-btn" data-year="2027_projected" aria-label="Show 2027 projected stats">2027 Projected</button>
                     </div>
                 </div>
                 
                 <div class="filter-section">
                     <label for="position-filter">Filter:</label>
-                    <select id="position-filter">
+                    <select id="position-filter" aria-label="Position filter">
                         <option value="all">All Players</option>
                         <option value="batter">Batters Only</option>
                         <option value="pitcher">Pitchers Only</option>
+                        <option value="C">C</option>
+                        <option value="1B">1B</option>
+                        <option value="2B">2B</option>
+                        <option value="3B">3B</option>
+                        <option value="SS">SS</option>
+                        <option value="LF">LF</option>
+                        <option value="CF">CF</option>
+                        <option value="RF">RF</option>
+                        <option value="DH">DH</option>
+                        <option value="SP">SP</option>
+                        <option value="RP">RP</option>
+                    </select>
+                </div>
+
+                <div class="filter-section">
+                    <label for="basic-team-filter">Team:</label>
+                    <select id="basic-team-filter" aria-label="Team filter">
+                        <option value="all">All Teams</option>
                     </select>
                 </div>
                 
                 <div class="search-section">
                     <label for="player-search">Search:</label>
-                    <input type="text" id="player-search" placeholder="Player name or team...">
+                    <input type="text" id="player-search" placeholder="Player name or team..." aria-label="Search players by name or team">
+                </div>
+
+                <div class="advanced-toggle">
+                    <button id="advanced-filters-toggle" aria-expanded="false" aria-controls="advanced-filters">Advanced Filters</button>
                 </div>
             </div>
-        </div>
-        
-        <div class="results-section">
-            <h2>Player Rankings</h2>
+            
+            <div id="advanced-filters" class="advanced-filters" hidden>
+                <div class="advanced-row">
+                    <div class="advanced-group">
+                        <h3>Teams</h3>
+                        <select id="team-filter" multiple aria-label="Filter by teams"></select>
+                        <small>Select one or more teams</small>
+                    </div>
+                    <div class="advanced-group">
+                        <h3>Positions</h3>
+                        <select id="position-multi" multiple aria-label="Filter by positions">
+                            <option value="C">C</option>
+                            <option value="1B">1B</option>
+                            <option value="2B">2B</option>
+                            <option value="3B">3B</option>
+                            <option value="SS">SS</option>
+                            <option value="LF">LF</option>
+                            <option value="CF">CF</option>
+                            <option value="RF">RF</option>
+                            <option value="DH">DH</option>
+                            <option value="SP">SP</option>
+                            <option value="RP">RP</option>
+                        </select>
+                        <small>Hold Ctrl/Cmd to multi-select</small>
+                    </div>
+                </div>
+                <div class="advanced-row">
+                    <div class="advanced-group">
+                        <h3>AVG Range</h3>
+                        <div class="range-row">
+                            <input type="range" id="avg-min" min="0" max="0.4" step="0.005" value="0">
+                            <input type="range" id="avg-max" min="0" max="0.4" step="0.005" value="0.4">
+                        </div>
+                        <div class="range-values"><span id="avg-min-val">0.000</span> - <span id="avg-max-val">0.400</span></div>
+                    </div>
+                    <div class="advanced-group">
+                        <h3>ERA Range</h3>
+                        <div class="range-row">
+                            <input type="range" id="era-min" min="0" max="10" step="0.1" value="0">
+                            <input type="range" id="era-max" min="0" max="10" step="0.1" value="10">
+                        </div>
+                        <div class="range-values"><span id="era-min-val">0.0</span> - <span id="era-max-val">10.0</span></div>
+                    </div>
+                </div>
+                <div class="advanced-row presets-row">
+                    <div class="advanced-group">
+                        <h3>Presets</h3>
+                        <div class="preset-controls">
+                            <input type="text" id="preset-name" placeholder="Preset name" aria-label="Preset name" />
+                            <button id="save-preset">Save Preset</button>
+                        </div>
+                        <div class="preset-controls">
+                            <select id="preset-select" aria-label="Choose preset"></select>
+                            <button id="apply-preset">Apply</button>
+                            <button id="delete-preset">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <div class="table-container">
                 <table id="players-table">
                     <thead>
                         <tr>
                             <th data-sort="name">Player Name</th>
-                            <th data-sort="team">Team</th>
-                            <th data-sort="position">Position</th>
+                            <th data-sort="team" class="team-column">Team</th>
+                            <th data-sort="position" class="position-column">POS</th>
                             <th class="batting-stat" data-sort="hits">Hits</th>
                             <th class="batting-stat" data-sort="avg">AVG</th>
                             <th class="batting-stat" data-sort="babip">BABIP</th>
@@ -136,10 +226,22 @@
                 </table>
             </div>
         </div>
-        
-        <div class="data-info">
-            <div id="data-timestamp">Last updated: Loading...</div>
+    </div>
+
+    <section class="analysis-card" id="draft-analysis">
+        <h2>Draft Value Analysis</h2>
+        <p class="analysis-note">Uses the stats year selected in the rankings above. Values are measured against a replacement-level player at each position.</p>
+        <div id="analysis-settings" class="analysis-settings"></div>
+        <div class="analysis-tabs" role="tablist">
+            <button class="analysis-tab active" data-tab="categories" role="tab">Category Impact</button>
+            <button class="analysis-tab" data-tab="board" role="tab">Draft Board &amp; Tiers</button>
+            <button class="analysis-tab" data-tab="positions" role="tab">Position Scarcity</button>
         </div>
+        <div id="analysis-output" class="analysis-output">Loading analysis...</div>
+    </section>
+    
+    <div class="data-info">
+        <div id="data-timestamp">Last updated: Loading...</div>
     </div>
 
     <footer>
@@ -163,8 +265,11 @@
     </script> -->
     
     <!-- Main JavaScript -->
-    <script src="static/main.js"></script>
+    <script src="static/supabase-client.js"></script>
     <script src="static/player-comparison.js"></script>
+    <script src="static/main.js"></script>
+    <script src="static/valuation.js"></script>
+    <script src="static/analysis.js"></script>
     
     <!-- Player Card Modal -->
     <div id="player-card-modal" class="modal">
@@ -183,6 +288,28 @@
             <h2>Player Comparison</h2>
             <div id="comparison-container">
                 <!-- Player comparison cards will be dynamically added here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal">
+        <div class="modal-content login-modal-content">
+            <span class="close-btn" onclick="closeLoginModal()">&times;</span>
+            <div class="login-form-container">
+                <h2>Login to DiamondDraft</h2>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="login-email">Email</label>
+                        <input type="email" id="login-email" name="email" placeholder="Enter your email" required aria-label="Email address">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" name="password" placeholder="Enter your password" required aria-label="Password">
+                    </div>
+                    <button type="submit" class="login-submit-btn" aria-label="Sign in">Sign In</button>
+                    <button type="button" class="reset-password-btn" onclick="showResetPassword()" aria-label="Reset password">Reset Password</button>
+                </form>
             </div>
         </div>
     </div>
