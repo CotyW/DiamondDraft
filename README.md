@@ -3,41 +3,58 @@ DiamondDraft is a web application for calculating and comparing baseball player 
 
 ## Features
 - Display and compare MLB player statistics (batters and pitchers)
+- Season tabs: 2024, 2025, 2026 actual and a 2027 projection
 - Customize scoring weights for different statistical categories
-- Calculate player values based on your scoring system
-- Toggle between actual (2024) and projected (2025) statistics
-- Filter players by position (batters/pitchers)
-- Search for specific players by name or team
-- Sort players by any statistic or calculated value
+- Filter by position and team, alone or together (e.g. 3B + Giants)
+- Multi-position eligibility (20+ games at a position in the latest season) and SP/RP pitcher roles
+- Search for players by name or team; sort by any statistic or calculated value
+- **Draft Analysis panel** for roto, H2H categories or points leagues:
+  - Category Impact: which categories are scarce or deep, and how much each is worth
+  - Draft Board & Tiers: player values above replacement level, grouped into tiers
+  - Position Scarcity: how steeply value drops at each position (including SP and RP)
 
 ## How It Works
-DiamondDraft is a static web application hosted on GitHub Pages. Player data is automatically updated daily from the MLB Stats API using GitHub Actions. All calculations are performed client-side in your browser.
+DiamondDraft is a static web application (GitHub Pages or a local Flask server). Player data lives in `data/*.json`, refreshed daily from the MLB Stats API by a GitHub Action. All calculations run client-side in your browser.
+
+The 2027 projection is a simple weighted blend of the last three seasons (50% / 30% / 20%), not a forecasting model.
 
 ## Live Demo
-Visit the live application: [https://CotyW.github.io/DiamondDraft](https://CotyW.github.io/DiamondDraft)
-
-### Data Updates
-Player statistics are updated daily at 5:00 UTC through an automated GitHub Action. This ensures you always have access to the latest player data without any manual intervention.
+[https://CotyW.github.io/DiamondDraft](https://CotyW.github.io/DiamondDraft)
 
 ## Local Development
-To work on this project locally:
-1. Clone this repository
-2. Run a local server (e.g., `python -m http.server` or use VSCode Live Server)
-3. Open your browser to the local server address
+1. Create a virtualenv and install dependencies: `pip install -r requirements.txt`
+2. Start the app: `python app.py`
+3. Open http://localhost:5000
+
+By default the app reads `data/players.json` (`DATA_SOURCE=static`). No database is needed.
 
 ### Updating Data Manually
-If you need to update the player data manually:
-1. Install Python and required packages: `pip install requests`
-2. Run the data fetch script: `python fetch_data.py`
-3. This will create/update JSON files in the `data/` directory
+```
+python fetch_data.py                                   # defaults
+python fetch_data.py --seasons 2024 2025 2026 --projection-year 2027
+```
+A full run makes about 1,800 API calls and takes roughly 15 minutes. It writes `data/players.json`, `batters.json`, `pitchers.json` and `last_updated.json`.
+
+### Publishing to GitHub Pages
+The root `index.html` is generated from `templates/index.html`. After editing the template, run `python build_pages.py` and commit the result.
+
+### Optional: Supabase storage
+For long-term storage in Supabase:
+1. Create a project and run `supabase_schema.sql` in its SQL editor.
+2. Put `SUPABASE_URL` and keys in `.env` (never commit it).
+3. Run `python upload_static_to_supabase.py` (use `--dry-run` first).
+4. Set `DATA_SOURCE=supabase` in `.env`.
 
 ## Project Structure
-- `index.html` - Main application page
-- `static/styles.css` - Application styling
-- `static/main.js` - Client-side logic and calculations
-- `/templates/data/` - JSON files containing player statistics
-- `fetch_data.py` - Script to fetch and process MLB player data
-- `.github/workflows/update-data.yml` - GitHub Action for automatic data updates
+- `app.py` - Flask server (serves the page, `/data/` and the config endpoint)
+- `templates/index.html` - Page template; `index.html` is generated from it by `build_pages.py`
+- `static/main.js` - Table, filters and calculator
+- `static/valuation.js` - Draft valuation engine (z-scores, replacement level, tiers)
+- `static/analysis.js`, `static/analysis.css` - Draft Analysis panel
+- `static/supabase-client.js` - Loads data from static JSON or Supabase
+- `fetch_data.py` - Fetches and processes MLB data
+- `upload_static_to_supabase.py`, `supabase_schema.sql` - Supabase setup
+- `.github/workflows/update-data.yml` - Daily data update
 
 ## License
 [MIT License](LICENSE)

@@ -1,358 +1,297 @@
-import requests
+"""Fetch MLB stats and write data/*.json.
+
+Output keys per player: stats_2024, stats_2025_actual, stats_2026_actual and
+stats_2027_projected. Existing players in data/players.json are kept and updated.
+
+Usage: python fetch_data.py [--seasons 2024 2025 2026] [--projection-year 2027]
+"""
+import argparse
 import json
+import os
 import time
 from datetime import datetime
-import os
-import random
 
-def fetch_players_data():
+import requests
+
+BASE_URL = "https://statsapi.mlb.com/api"
+DATA_DIR = 'data'
+DEFAULT_SEASONS = [2024, 2025, 2026]
+PITCHER_POSITIONS = ['P', 'SP', 'RP', 'CL']
+ELIGIBILITY_GAMES = 20  # games at a position in the latest season to be eligible there
+SP_START_SHARE = 0.5    # share of appearances that are starts for a pitcher to count as SP
+FIELDING_POSITIONS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'OF']
+FIP_CONSTANT = 3.10
+# Newest season first; used to blend past seasons into the projection.
+PROJECTION_WEIGHTS = [0.5, 0.3, 0.2]
+
+BATTING_KEYS = ['avg', 'runs', 'rbi', 'steals', 'hr', 'hits', 'babip', 'ab']
+PITCHING_KEYS = ['wins', 'era', 'strikeouts', 'walks', 'saves', 'runs_scored', 'fip', 'ip', 'hits_allowed']
+# ab/ip/hits_allowed give volume for weighting AVG, ERA and WHIP in roto valuation
+RATE_KEYS = {'avg': 3, 'babip': 3, 'era': 2, 'fip': 2, 'ip': 1}
+
+
+def season_key(season, projection_year):
+    if season == projection_year:
+        return f'stats_{season}_projected'
+    return 'stats_2024' if season == 2024 else f'stats_{season}_actual'
+
+
+def empty_stats():
+    stats = {k: 0 for k in BATTING_KEYS + PITCHING_KEYS}
+    for k in RATE_KEYS:
+        stats[k] = 0.0
+    return stats
+
+
+def innings_to_float(ip):
+    whole, _, frac = str(ip or 0).partition('.')
+    return int(whole or 0) + int(frac or 0) / 3
+
+
+def batting_from_splits(splits):
+    """Combine a season's splits (one per team when a player was traded)."""
+    t = {k: 0 for k in ('ab', 'h', 'hr', 'so', 'sf', 'runs', 'rbi', 'sb')}
+    for s in splits:
+        st = s['stat']
+        t['ab'] += int(st.get('atBats', 0) or 0)
+        t['h'] += int(st.get('hits', 0) or 0)
+        t['hr'] += int(st.get('homeRuns', 0) or 0)
+        t['so'] += int(st.get('strikeOuts', 0) or 0)
+        t['sf'] += int(st.get('sacFlies', 0) or 0)
+        t['runs'] += int(st.get('runs', 0) or 0)
+        t['rbi'] += int(st.get('rbi', 0) or 0)
+        t['sb'] += int(st.get('stolenBases', 0) or 0)
+    denom = t['ab'] - t['so'] - t['hr'] + t['sf']
+    return {
+        'avg': round(t['h'] / t['ab'], 3) if t['ab'] else 0.0,
+        'runs': t['runs'], 'rbi': t['rbi'], 'steals': t['sb'], 'hr': t['hr'], 'hits': t['h'],
+        'ab': t['ab'],
+        'babip': round((t['h'] - t['hr']) / denom, 3) if denom > 0 else 0.0,
+    }
+
+
+def pitching_from_splits(splits):
+    t = {k: 0 for k in ('w', 'er', 'k', 'bb', 'sv', 'r', 'hr', 'h')}
+    ip = 0.0
+    for s in splits:
+        st = s['stat']
+        t['w'] += int(st.get('wins', 0) or 0)
+        t['er'] += int(st.get('earnedRuns', 0) or 0)
+        t['k'] += int(st.get('strikeOuts', 0) or 0)
+        t['bb'] += int(st.get('baseOnBalls', 0) or 0)
+        t['sv'] += int(st.get('saves', 0) or 0)
+        t['r'] += int(st.get('runs', 0) or 0)
+        t['hr'] += int(st.get('homeRuns', 0) or 0)
+        t['h'] += int(st.get('hits', 0) or 0)
+        ip += innings_to_float(st.get('inningsPitched'))
+    return {
+        'ip': round(ip, 1), 'hits_allowed': t['h'],
+        'wins': t['w'],
+        'era': round(t['er'] * 9 / ip, 2) if ip else 0.0,
+        'strikeouts': t['k'], 'walks': t['bb'], 'saves': t['sv'], 'runs_scored': t['r'],
+        'fip': round((13 * t['hr'] + 3 * t['bb'] - 2 * t['k']) / ip + FIP_CONSTANT, 2) if ip else 0.0,
+    }
+
+
+def project_next_season(history, is_pitcher):
+    """Weighted blend of recent seasons (newest first). Seasons with no activity are skipped."""
+    keys = PITCHING_KEYS if is_pitcher else BATTING_KEYS
+    active = [h for h in history if any(h.get(k) for k in keys)]
+    weights = PROJECTION_WEIGHTS[:len(active)]
+    total = sum(weights)
+    proj = empty_stats()
+    if not active:
+        return proj
+    for k in keys:
+        value = sum(w * h.get(k, 0) for w, h in zip(weights, active)) / total
+        proj[k] = round(value, RATE_KEYS[k]) if k in RATE_KEYS else int(round(value))
+    return proj
+
+
+def build_player_stats(person, is_pitcher, seasons, projection_year):
+    group = 'pitching' if is_pitcher else 'hitting'
+    by_season = {}
+    for stat_group in person.get('stats', []):
+        if stat_group['group']['displayName'] != group:
+            continue
+        for split in stat_group.get('splits', []):
+            if split.get('season') and 'stat' in split:
+                by_season.setdefault(int(split['season']), []).append(split)
+
+    builder = pitching_from_splits if is_pitcher else batting_from_splits
+    result, history = {}, []
+    for season in sorted(seasons):
+        stats = empty_stats()
+        if season in by_season:
+            stats.update(builder(by_season[season]))
+        result[season_key(season, projection_year)] = stats
+        history.append(stats)
+    result[season_key(projection_year, projection_year)] = project_next_season(history[::-1], is_pitcher)
+    return result
+
+
+def eligible_positions(person, season, roster_position, min_games=ELIGIBILITY_GAMES):
+    """Positions with at least min_games fielded in `season`, most games first.
+
+    The roster position is always included so every player has at least one position.
     """
-    Fetch real MLB player data from the MLB Stats API and save as JSON files.
-    """
+    games = {}
+    for stat_group in person.get('stats', []):
+        if stat_group['group']['displayName'] != 'fielding':
+            continue
+        for split in stat_group.get('splits', []):
+            pos = split.get('position', {}).get('abbreviation')
+            if split.get('season') == str(season) and pos in FIELDING_POSITIONS:
+                games[pos] = games.get(pos, 0) + int(split.get('stat', {}).get('gamesPlayed', 0) or 0)
+    eligible = [p for p, g in sorted(games.items(), key=lambda x: -x[1]) if g >= min_games]
+    if roster_position and roster_position not in eligible:
+        eligible.insert(0, roster_position)
+    return eligible or [roster_position or '']
+
+
+def pitcher_role(person, seasons):
+    """'SP' or 'RP' from the most recent season with pitching appearances, else 'P'."""
+    for season in sorted(seasons, reverse=True):
+        games = starts = 0
+        for stat_group in person.get('stats', []):
+            if stat_group['group']['displayName'] != 'pitching':
+                continue
+            for split in stat_group.get('splits', []):
+                if split.get('season') == str(season):
+                    st = split.get('stat', {})
+                    games += int(st.get('gamesPlayed', 0) or 0)
+                    starts += int(st.get('gamesStarted', 0) or 0)
+        if games:
+            return 'SP' if starts / games >= SP_START_SHARE else 'RP'
+    return 'P'
+
+
+def latest_team(person, season):
+    """Most recent team name in a player's stat splits for a season, or None."""
+    team = None
+    for stat_group in person.get('stats', []):
+        for split in stat_group.get('splits', []):
+            if split.get('season') == str(season) and split.get('team', {}).get('name'):
+                team = split['team']['name']
+    return team
+
+
+def fetch_roster(season):
+    teams = requests.get(f"{BASE_URL}/v1/teams?sportId=1&season={season}", timeout=30)
+    teams.raise_for_status()
+    players = {}
+    for team in teams.json()['teams']:
+        url = f"{BASE_URL}/v1/teams/{team['id']}/roster?rosterType=fullSeason&season={season}"
+        resp = requests.get(url, timeout=30)
+        if resp.status_code != 200:
+            print(f"Error fetching roster for team {team['id']}: {resp.status_code}")
+            continue
+        for p in resp.json().get('roster', []):
+            # Players traded mid-season appear on several rosters; keep one entry per player
+            players.setdefault(p['person']['id'], {
+                'id': p['person']['id'],
+                'full_name': p['person']['fullName'],
+                'position': p.get('position', {}).get('abbreviation', ''),
+                'team_name': team['name'],
+            })
+        time.sleep(0.05)
+    return list(players.values())
+
+
+def fetch_players_data(seasons=None, projection_year=None):
+    """Fetch players and stats from the MLB Stats API and save as JSON files."""
+    seasons = seasons or DEFAULT_SEASONS
+    projection_year = projection_year or max(seasons) + 1
     try:
-        # Create data directory if it doesn't exist
-        os.makedirs('data', exist_ok=True)
-        
-        # Lists to store batters and pitchers
-        batters = []
-        pitchers = []
-        
-        print("Fetching active MLB players...")
-        
-        # MLB Stats API base URL
-        base_url = "https://statsapi.mlb.com/api"
-        
-        # First, get all teams to get player IDs
-        teams_url = f"{base_url}/v1/teams?sportId=1"
-        teams_response = requests.get(teams_url)
-        
-        if teams_response.status_code != 200:
-            print(f"Error fetching teams: {teams_response.status_code}")
-            return False
-            
-        teams_data = teams_response.json()
-        all_player_ids = []
-        
-        # Collect player IDs from each team
-        for team in teams_data['teams']:
-            team_id = team['id']
-            roster_url = f"{base_url}/v1/teams/{team_id}/roster/active"
-            
-            roster_response = requests.get(roster_url)
-            if roster_response.status_code == 200:
-                roster_data = roster_response.json()
-                
-                for player in roster_data.get('roster', []):
-                    all_player_ids.append({
-                        'id': player['person']['id'],
-                        'full_name': player['person']['fullName'],
-                        'position': player.get('position', {}).get('abbreviation', ''),
-                        'team_id': team_id,
-                        'team_name': team['name']
-                    })
-            else:
-                print(f"Error fetching roster for team {team_id}: {roster_response.status_code}")
-            
-            # Be nice to the API with a small delay
-            time.sleep(0.1)
-        
-        print(f"Found {len(all_player_ids)} active players")
-        
-        # Current year for stats
-        current_year = datetime.now().year
-        previous_year = current_year - 1
-        
-        # Process each player
-        for idx, player_info in enumerate(all_player_ids):
+        os.makedirs(DATA_DIR, exist_ok=True)
+        existing = {}
+        path = os.path.join(DATA_DIR, 'players.json')
+        if os.path.exists(path):
+            with open(path, encoding='utf-8') as f:
+                existing = {p['id']: p for p in json.load(f)}
+
+        print(f"Fetching rosters for {max(seasons)}...")
+        roster = fetch_roster(max(seasons))
+        print(f"Found {len(roster)} players")
+
+        # Keep players from earlier data who are no longer on a roster
+        roster_ids = {p['id'] for p in roster}
+        for pid, old in existing.items():
+            if pid not in roster_ids:
+                roster.append({'id': pid, 'full_name': old['name'],
+                               'position': old.get('primary_position') or old.get('position', '').split('/')[0],
+                               'team_name': old.get('team', '')})
+
+        hydrate = "stats(group=[hitting,pitching,fielding],type=[yearByYear])"
+        players = []
+        for idx, info in enumerate(roster):
             try:
-                player_id = player_info['id']
-                
-                # Get detailed player info
-                player_url = f"{base_url}/v1/people/{player_id}?hydrate=stats(group=[hitting,pitching],type=[yearByYear])"
-                player_response = requests.get(player_url)
-                
-                if player_response.status_code != 200:
-                    print(f"Error fetching player {player_id}: {player_response.status_code}")
+                resp = requests.get(f"{BASE_URL}/v1/people/{info['id']}?hydrate={hydrate}", timeout=30)
+                if resp.status_code != 200 or not resp.json().get('people'):
+                    print(f"Skipping player {info['id']}: HTTP {resp.status_code}")
                     continue
-                    
-                player_data = player_response.json()
-                if not player_data.get('people'):
-                    print(f"No data found for player {player_id}")
-                    continue
-                
-                person = player_data['people'][0]
-                
-                # Determine if player is a pitcher based on position
-                is_pitcher = player_info['position'] in ['P', 'SP', 'RP', 'CL']
-                
-                # Initialize stats dictionaries
-                batting_stats_2024 = {
-                    'avg': 0.0, 'runs': 0, 'rbi': 0, 'steals': 0, 'hr': 0, 'hits': 0, 'babip': 0.0
-                }
-                
-                pitching_stats_2024 = {
-                    'wins': 0, 'era': 0.0, 'strikeouts': 0, 'walks': 0, 'saves': 0, 'runs_scored': 0, 'fip': 0.0
-                }
-                
-                # Initialize 2025 actual stats (will be populated from API)
-                batting_stats_2025_actual = {
-                    'avg': 0.0, 'runs': 0, 'rbi': 0, 'steals': 0, 'hr': 0, 'hits': 0, 'babip': 0.0
-                }
-                
-                pitching_stats_2025_actual = {
-                    'wins': 0, 'era': 0.0, 'strikeouts': 0, 'walks': 0, 'saves': 0, 'runs_scored': 0, 'fip': 0.0
-                }
-                
-                # Make simple projections for 2025 based on 2024 data (or previous years)
-                batting_stats_2025_projected = dict(batting_stats_2024)
-                pitching_stats_2025_projected = dict(pitching_stats_2024)
-                
-                # Extract stats if available
-                if 'stats' in person:
-                    for stat_group in person['stats']:
-                        if stat_group['group']['displayName'] == 'hitting':
-                            for season_stat in stat_group['splits']:
-                                stat_year = season_stat.get('season')
-                                
-                                # Get 2024 stats (previous year)
-                                if stat_year == str(previous_year):
-                                    stats = season_stat['stat']
-                                    batting_stats_2024['avg'] = float(stats.get('avg', 0)) or 0
-                                    batting_stats_2024['runs'] = int(stats.get('runs', 0)) or 0
-                                    batting_stats_2024['rbi'] = int(stats.get('rbi', 0)) or 0
-                                    batting_stats_2024['steals'] = int(stats.get('stolenBases', 0)) or 0
-                                    batting_stats_2024['hr'] = int(stats.get('homeRuns', 0)) or 0
-                                    batting_stats_2024['hits'] = int(stats.get('hits', 0)) or 0
-                                    
-                                    # Calculate BABIP
-                                    at_bats = int(stats.get('atBats', 0)) or 1  # Avoid division by zero
-                                    hits = int(stats.get('hits', 0)) or 0
-                                    hr = int(stats.get('homeRuns', 0)) or 0
-                                    strikeouts = int(stats.get('strikeOuts', 0)) or 0
-                                    
-                                    # BABIP = (H - HR) / (AB - K - HR + SF)
-                                    # Note: SF (sacrifice flies) isn't always available, so we'll use an approximation
-                                    denominator = at_bats - strikeouts - hr
-                                    if denominator > 0:
-                                        batting_stats_2024['babip'] = round((hits - hr) / denominator, 3)
-                                    else:
-                                        batting_stats_2024['babip'] = 0.0
-                                    
-                                    # Simple projection: last year + small random adjustment
-                                    factor = random.uniform(0.9, 1.1)  # ±10% variation
-                                    
-                                    batting_stats_2025_projected['avg'] = round(batting_stats_2024['avg'] * factor, 3)
-                                    batting_stats_2025_projected['runs'] = int(batting_stats_2024['runs'] * factor)
-                                    batting_stats_2025_projected['rbi'] = int(batting_stats_2024['rbi'] * factor)
-                                    batting_stats_2025_projected['steals'] = int(batting_stats_2024['steals'] * factor)
-                                    batting_stats_2025_projected['hr'] = int(batting_stats_2024['hr'] * factor)
-                                    batting_stats_2025_projected['hits'] = int(batting_stats_2024['hits'] * factor)
-                                    batting_stats_2025_projected['babip'] = round(batting_stats_2024['babip'] * factor, 3)
-                                
-                                # Get 2025 stats (current year)
-                                elif stat_year == str(current_year):
-                                    stats = season_stat['stat']
-                                    batting_stats_2025_actual['avg'] = float(stats.get('avg', 0)) or 0
-                                    batting_stats_2025_actual['runs'] = int(stats.get('runs', 0)) or 0
-                                    batting_stats_2025_actual['rbi'] = int(stats.get('rbi', 0)) or 0
-                                    batting_stats_2025_actual['steals'] = int(stats.get('stolenBases', 0)) or 0
-                                    batting_stats_2025_actual['hr'] = int(stats.get('homeRuns', 0)) or 0
-                                    batting_stats_2025_actual['hits'] = int(stats.get('hits', 0)) or 0
-                                    
-                                    # Calculate BABIP for 2025
-                                    at_bats = int(stats.get('atBats', 0)) or 1
-                                    hits = int(stats.get('hits', 0)) or 0
-                                    hr = int(stats.get('homeRuns', 0)) or 0
-                                    strikeouts = int(stats.get('strikeOuts', 0)) or 0
-                                    
-                                    denominator = at_bats - strikeouts - hr
-                                    if denominator > 0:
-                                        batting_stats_2025_actual['babip'] = round((hits - hr) / denominator, 3)
-                                    else:
-                                        batting_stats_2025_actual['babip'] = 0.0
-                                    
-                        if stat_group['group']['displayName'] == 'pitching':
-                            for season_stat in stat_group['splits']:
-                                stat_year = season_stat.get('season')
-                                
-                                # Get 2024 stats (previous year)
-                                if stat_year == str(previous_year):
-                                    stats = season_stat['stat']
-                                    pitching_stats_2024['wins'] = int(stats.get('wins', 0)) or 0
-                                    pitching_stats_2024['era'] = float(stats.get('era', 0)) or 0
-                                    pitching_stats_2024['strikeouts'] = int(stats.get('strikeOuts', 0)) or 0
-                                    pitching_stats_2024['walks'] = int(stats.get('baseOnBalls', 0)) or 0
-                                    pitching_stats_2024['saves'] = int(stats.get('saves', 0)) or 0
-                                    pitching_stats_2024['runs_scored'] = int(stats.get('runs', 0)) or 0
-                                    
-                                    # Calculate FIP (Fielding Independent Pitching)
-                                    hr_allowed = int(stats.get('homeRuns', 0)) or 0
-                                    bb = int(stats.get('baseOnBalls', 0)) or 0
-                                    so = int(stats.get('strikeOuts', 0)) or 0
-                                    innings_pitched = float(stats.get('inningsPitched', 0)) or 1.0
-                                    
-                                    # FIP constant varies by year, but we'll use a standard approximation
-                                    fip_constant = 3.10
-                                    
-                                    # FIP = ((13*HR) + (3*BB) - (2*K)) / IP + FIP_constant
-                                    fip = ((13 * hr_allowed) + (3 * bb) - (2 * so)) / innings_pitched + fip_constant
-                                    pitching_stats_2024['fip'] = round(fip, 2)
-                                    
-                                    # Simple projection: last year + small random adjustment
-                                    factor = random.uniform(0.9, 1.1)  # ±10% variation
-                                    
-                                    pitching_stats_2025_projected['wins'] = int(pitching_stats_2024['wins'] * factor)
-                                    # ERA is better when lower, so invert factor
-                                    era_factor = 2 - factor  # This will be between 0.9 and 1.1
-                                    pitching_stats_2025_projected['era'] = round(pitching_stats_2024['era'] * era_factor, 2)
-                                    pitching_stats_2025_projected['strikeouts'] = int(pitching_stats_2024['strikeouts'] * factor)
-                                    pitching_stats_2025_projected['walks'] = int(pitching_stats_2024['walks'] * era_factor)
-                                    pitching_stats_2025_projected['saves'] = int(pitching_stats_2024['saves'] * factor)
-                                    pitching_stats_2025_projected['runs_scored'] = int(pitching_stats_2024['runs_scored'] * factor)
-                                    
-                                    # FIP is better when lower, so invert factor like ERA
-                                    pitching_stats_2025_projected['fip'] = round(pitching_stats_2024['fip'] * era_factor, 2)
-                                
-                                # Get 2025 stats (current year)
-                                elif stat_year == str(current_year):
-                                    stats = season_stat['stat']
-                                    pitching_stats_2025_actual['wins'] = int(stats.get('wins', 0)) or 0
-                                    pitching_stats_2025_actual['era'] = float(stats.get('era', 0)) or 0
-                                    pitching_stats_2025_actual['strikeouts'] = int(stats.get('strikeOuts', 0)) or 0
-                                    pitching_stats_2025_actual['walks'] = int(stats.get('baseOnBalls', 0)) or 0
-                                    pitching_stats_2025_actual['saves'] = int(stats.get('saves', 0)) or 0
-                                    pitching_stats_2025_actual['runs_scored'] = int(stats.get('runs', 0)) or 0
-                                    
-                                    # Calculate FIP for 2025
-                                    hr_allowed = int(stats.get('homeRuns', 0)) or 0
-                                    bb = int(stats.get('baseOnBalls', 0)) or 0
-                                    so = int(stats.get('strikeOuts', 0)) or 0
-                                    innings_pitched = float(stats.get('inningsPitched', 0)) or 1.0
-                                    
-                                    fip_constant = 3.10
-                                    fip = ((13 * hr_allowed) + (3 * bb) - (2 * so)) / innings_pitched + fip_constant
-                                    pitching_stats_2025_actual['fip'] = round(fip, 2)
-                
-                # Create player object
-                player_obj = {
-                    'id': player_id,
-                    'name': player_info['full_name'],
-                    'team': player_info['team_name'],
-                    'position': player_info['position'],
-                    'is_pitcher': is_pitcher,
-                    'stats_2024': {
-                        'avg': batting_stats_2024['avg'],
-                        'runs': batting_stats_2024['runs'],
-                        'rbi': batting_stats_2024['rbi'],
-                        'steals': batting_stats_2024['steals'],
-                        'hr': batting_stats_2024['hr'],
-                        'hits': batting_stats_2024['hits'],
-                        'babip': batting_stats_2024['babip'],
-                        'wins': pitching_stats_2024['wins'],
-                        'era': pitching_stats_2024['era'],
-                        'strikeouts': pitching_stats_2024['strikeouts'],
-                        'walks': pitching_stats_2024['walks'],
-                        'saves': pitching_stats_2024['saves'],
-                        'runs_scored': pitching_stats_2024['runs_scored'],
-                        'fip': pitching_stats_2024['fip']
-                    },
-                    'stats_2025_projected': {
-                        'avg': batting_stats_2025_projected['avg'],
-                        'runs': batting_stats_2025_projected['runs'],
-                        'rbi': batting_stats_2025_projected['rbi'],
-                        'steals': batting_stats_2025_projected['steals'],
-                        'hr': batting_stats_2025_projected['hr'],
-                        'hits': batting_stats_2025_projected['hits'],
-                        'babip': batting_stats_2025_projected['babip'],
-                        'wins': pitching_stats_2025_projected['wins'],
-                        'era': pitching_stats_2025_projected['era'],
-                        'strikeouts': pitching_stats_2025_projected['strikeouts'],
-                        'walks': pitching_stats_2025_projected['walks'],
-                        'saves': pitching_stats_2025_projected['saves'],
-                        'runs_scored': pitching_stats_2025_projected['runs_scored'],
-                        'fip': pitching_stats_2025_projected['fip']
-                    },
-                    'stats_2025_actual': {
-                        'avg': batting_stats_2025_actual['avg'],
-                        'runs': batting_stats_2025_actual['runs'],
-                        'rbi': batting_stats_2025_actual['rbi'],
-                        'steals': batting_stats_2025_actual['steals'],
-                        'hr': batting_stats_2025_actual['hr'],
-                        'hits': batting_stats_2025_actual['hits'],
-                        'babip': batting_stats_2025_actual['babip'],
-                        'wins': pitching_stats_2025_actual['wins'],
-                        'era': pitching_stats_2025_actual['era'],
-                        'strikeouts': pitching_stats_2025_actual['strikeouts'],
-                        'walks': pitching_stats_2025_actual['walks'],
-                        'saves': pitching_stats_2025_actual['saves'],
-                        'runs_scored': pitching_stats_2025_actual['runs_scored'],
-                        'fip': pitching_stats_2025_actual['fip']
-                    }
-                }
-                
-                # Add to appropriate list
+                person = resp.json()['people'][0]
+                is_pitcher = info['position'] in PITCHER_POSITIONS
                 if is_pitcher:
-                    pitchers.append(player_obj)
+                    positions = [pitcher_role(person, seasons)]
                 else:
-                    batters.append(player_obj)
-                
-                # Log progress
-                if idx % 50 == 0:
-                    print(f"Processed {idx} players...")
-                
-                # Be nice to the API with a small delay
-                time.sleep(0.1)
-                
+                    positions = eligible_positions(person, max(seasons), info['position'])
+                player = {
+                    'id': info['id'],
+                    'name': info['full_name'],
+                    'team': latest_team(person, max(seasons)) or info['team_name'],
+                    'position': '/'.join(positions),
+                    'primary_position': positions[0],
+                    'is_pitcher': is_pitcher,
+                }
+                player.update(build_player_stats(person, is_pitcher, seasons, projection_year))
+                players.append(player)
+                if idx % 100 == 0:
+                    print(f"Processed {idx}/{len(roster)} players...")
+                time.sleep(0.05)
             except Exception as e:
-                print(f"Error processing player {player_info['full_name']}: {str(e)}")
-        
-        # Create a combined player list
-        all_players = batters + pitchers
-        
-        # Save data as JSON files
-        with open('data/players.json', 'w') as f:
-            json.dump(all_players, f)
-            
-        with open('data/batters.json', 'w') as f:
-            json.dump(batters, f)
-            
-        with open('data/pitchers.json', 'w') as f:
-            json.dump(pitchers, f)
-            
-        # Save last updated timestamp
-        with open('data/last_updated.json', 'w') as f:
+                print(f"Error processing player {info['full_name']}: {e}")
+
+        if not players:
+            print("No players fetched; leaving existing data untouched")
+            return False
+
+        batters = [p for p in players if not p['is_pitcher']]
+        pitchers = [p for p in players if p['is_pitcher']]
+        for name, data in (('players', players), ('batters', batters), ('pitchers', pitchers)):
+            with open(os.path.join(DATA_DIR, f'{name}.json'), 'w', encoding='utf-8') as f:
+                json.dump(data, f)
+        with open(os.path.join(DATA_DIR, 'last_updated.json'), 'w') as f:
             json.dump({
                 'timestamp': datetime.now().isoformat(),
-                'total_players': len(all_players),
+                'total_players': len(players),
                 'batters': len(batters),
-                'pitchers': len(pitchers)
+                'pitchers': len(pitchers),
+                'seasons': seasons,
+                'projection_year': projection_year,
             }, f)
-            
-        print(f"Saved {len(all_players)} players ({len(batters)} batters, {len(pitchers)} pitchers)")
+        print(f"Saved {len(players)} players ({len(batters)} batters, {len(pitchers)} pitchers)")
         return True
-        
     except Exception as e:
-        print(f"Error fetching players data: {str(e)}")
+        print(f"Error fetching players data: {e}")
         return False
 
+
 def fetch_player_by_name(player_name):
-    """
-    Search for a player by name in the MLB Stats API
-    """
+    """Search for a player by name in the MLB Stats API."""
     try:
-        search_url = f"https://statsapi.mlb.com/api/v1/people/search?names={player_name}"
-        response = requests.get(search_url)
-        
+        response = requests.get(f"{BASE_URL}/v1/people/search?names={player_name}", timeout=30)
         if response.status_code != 200:
             return None
-            
-        data = response.json()
-        return data.get('people', [])
+        return response.json().get('people', [])
     except Exception as e:
-        print(f"Error searching for player: {str(e)}")
+        print(f"Error searching for player: {e}")
         return None
 
+
 if __name__ == "__main__":
-    # This allows running this script directly for testing
-    print("Running fetch_data.py to update player data...")
-    fetch_players_data()
+    parser = argparse.ArgumentParser(description="Update player data from the MLB Stats API")
+    parser.add_argument('--seasons', type=int, nargs='+', default=DEFAULT_SEASONS)
+    parser.add_argument('--projection-year', type=int)
+    args = parser.parse_args()
+    raise SystemExit(0 if fetch_players_data(args.seasons, args.projection_year) else 1)
