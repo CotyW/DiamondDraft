@@ -40,6 +40,9 @@ Failed requests are retried. If a run still comes back with more than 5% fewer p
 ### Rolling Over to a New Season
 The season years are set in one place: `DEFAULT_SEASONS` in `fetch_data.py`. Add the new season there (the projection is always the year after the last one) and run the fetch. The page builds its season tabs from `data/last_updated.json`, so nothing else needs editing.
 
+### Running Tests
+The draft valuation engine (`static/valuation.js`) has tests in `tests/`. They need Node 22 or later and nothing else: run `npm test` (or `node --test tests/valuation.test.js`). They also run on GitHub for every push.
+
 ### Publishing to GitHub Pages
 The root `index.html` is generated from `templates/index.html`. After editing the template, run `python build_pages.py` and commit the result.
 
@@ -59,7 +62,9 @@ For long-term storage in Supabase:
 - `static/supabase-client.js` - Loads data from static JSON or Supabase
 - `fetch_data.py` - Fetches and processes MLB data
 - `upload_static_to_supabase.py`, `supabase_schema.sql` - Supabase setup
+- `tests/valuation.test.js` - Tests for the valuation engine (`npm test`)
 - `.github/workflows/update-data.yml` - Daily data update
+- `.github/workflows/test.yml` - Runs the tests on every push
 - `archive/supabase-pipeline/` - Unfinished FanGraphs-to-Supabase ingestion scripts, kept for reference (not used)
 
 ## License
