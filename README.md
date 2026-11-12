@@ -3,7 +3,7 @@ DiamondDraft is a web application for calculating and comparing baseball player 
 
 ## Features
 - Display and compare MLB player statistics (batters and pitchers)
-- Season tabs: 2024, 2025, 2026 actual and a 2027 projection
+- Season tabs for the last three seasons plus a projection for the next one
 - Customize scoring weights for different statistical categories
 - Filter by position and team, alone or together (e.g. 3B + Giants)
 - Multi-position eligibility (20+ games at a position in the latest season) and SP/RP pitcher roles
@@ -16,7 +16,7 @@ DiamondDraft is a web application for calculating and comparing baseball player 
 ## How It Works
 DiamondDraft is a static web application (GitHub Pages or a local Flask server). Player data lives in `data/*.json`, refreshed daily from the MLB Stats API by a GitHub Action. All calculations run client-side in your browser.
 
-The 2027 projection is a simple weighted blend of the last three seasons (50% / 30% / 20%), not a forecasting model.
+The projection is a simple weighted blend of the last three seasons (50% / 30% / 20%), not a forecasting model.
 
 ## Live Demo
 [https://CotyW.github.io/DiamondDraft](https://CotyW.github.io/DiamondDraft)
@@ -30,10 +30,13 @@ By default the app reads `data/players.json` (`DATA_SOURCE=static`). No database
 
 ### Updating Data Manually
 ```
-python fetch_data.py                                   # defaults
+python fetch_data.py                                   # seasons from DEFAULT_SEASONS
 python fetch_data.py --seasons 2024 2025 2026 --projection-year 2027
 ```
 A full run makes about 1,800 API calls and takes roughly 15 minutes. It writes `data/players.json`, `batters.json`, `pitchers.json` and `last_updated.json`.
+
+### Rolling Over to a New Season
+The season years are set in one place: `DEFAULT_SEASONS` in `fetch_data.py`. Add the new season there (the projection is always the year after the last one) and run the fetch. The page builds its season tabs from `data/last_updated.json`, so nothing else needs editing.
 
 ### Publishing to GitHub Pages
 The root `index.html` is generated from `templates/index.html`. After editing the template, run `python build_pages.py` and commit the result.
@@ -55,6 +58,7 @@ For long-term storage in Supabase:
 - `fetch_data.py` - Fetches and processes MLB data
 - `upload_static_to_supabase.py`, `supabase_schema.sql` - Supabase setup
 - `.github/workflows/update-data.yml` - Daily data update
+- `archive/supabase-pipeline/` - Unfinished FanGraphs-to-Supabase ingestion scripts, kept for reference (not used)
 
 ## License
 [MIT License](LICENSE)
