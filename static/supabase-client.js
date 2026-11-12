@@ -7,13 +7,30 @@ let supabaseClient = null;
 let dataSource = 'static';
 let staticDataPromise = null;
 let configReady = null;
+let metaPromise = null;
 
-const STATIC_SEASON_KEYS = {
-    2024: 'stats_2024',
-    2025: 'stats_2025_actual',
-    2026: 'stats_2026_actual',
-    2027: 'stats_2027_projected'
-};
+// data/last_updated.json, written by fetch_data.py: timestamp, seasons and projection_year
+function loadMeta() {
+    if (!metaPromise) {
+        metaPromise = fetch('data/last_updated.json').then(r => {
+            if (!r.ok) throw new Error(`last_updated.json: HTTP ${r.status}`);
+            return r.json();
+        });
+    }
+    return metaPromise;
+}
+
+/**
+ * Which seasons the data holds. This is the page's only source for season years.
+ * @returns {Promise<{seasons: number[], projectionYear: number|null}>} seasons are the
+ *   actual-stat years, oldest first; projectionYear is the projected season, if any
+ */
+async function getSeasonConfig() {
+    const meta = await loadMeta();
+    const seasons = (meta.seasons || []).map(Number).sort((a, b) => a - b);
+    if (!seasons.length) throw new Error('last_updated.json lists no seasons');
+    return { seasons, projectionYear: meta.projection_year ? Number(meta.projection_year) : null };
+}
 
 function loadConfig() {
     if (!configReady) {
@@ -43,7 +60,7 @@ async function fetchStaticPlayers(filter, seasons) {
     const list = players.map(p => {
         const statsBySeason = {};
         seasons.forEach(season => {
-            const flat = p[STATIC_SEASON_KEYS[season]] || {};
+            const flat = (p.stats && p.stats[season]) || {};
             statsBySeason[season] = { batting: { ...flat }, pitching: { ...flat } };
         });
         return { ...p, player_id: p.id, stats_by_season: statsBySeason };
@@ -79,11 +96,12 @@ async function initializeSupabase() {
 document.addEventListener('DOMContentLoaded', initializeSupabase);
 
 /**
- * Fetch all players from Supabase with their 2025 stats
+ * Fetch all players with their stats for the given seasons
  * @param {string} filter - 'batter', 'pitcher', or 'all'
+ * @param {number[]} seasons - season years to load (see getSeasonConfig)
  * @returns {Promise<Array>} Array of player objects with stats
  */
-async function fetchPlayersWithStats(filter = 'all', seasons = [2024, 2025, 2026]) {
+async function fetchPlayersWithStats(filter, seasons) {
     await loadConfig();
     if (dataSource === 'static') {
         try {
@@ -245,8 +263,7 @@ async function getLastUpdated() {
     await loadConfig();
     if (dataSource === 'static') {
         try {
-            const r = await fetch('data/last_updated.json');
-            const meta = await r.json();
+            const meta = await loadMeta();
             return new Date(meta.timestamp);
         } catch (error) {
             return new Date();

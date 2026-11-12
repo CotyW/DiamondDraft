@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const playersBody = document.getElementById('players-body');
     const tableContainer = document.querySelector('.table-container');
     const positionFilter = document.getElementById('position-filter');
-    const yearBtns = document.querySelectorAll('.year-btn');
+    const yearButtonsEl = document.getElementById('year-buttons');
     const playerSearch = document.getElementById('player-search');
     const dataTimestamp = document.getElementById('data-timestamp');
     const loginBtn = document.getElementById('login-btn');
@@ -16,13 +16,13 @@ document.addEventListener('DOMContentLoaded', function() {
     let activeModal = null;
     
     // State variables
-    const INITIAL_SEASONS = [2024, 2025];
-    const loadedSeasons = new Set(INITIAL_SEASONS.map(String));
+    // Season years come from the data (getSeasonConfig); none are written in this file
+    let projectionYear = null;
+    const loadedSeasons = new Set();
     const playerCardCache = new Map();
     let allPlayers = [];
     let displayedPlayers = [];
-    let currentYear = '2025';
-    let dataType = 'actual'; // 'actual' or 'projected'
+    let currentYear = null; // set in loadData to the latest season with actual stats
     let currentSort = {column: 'points', direction: 'desc'};
     let searchTerm = '';
     let currentTableData = [];
@@ -320,27 +320,39 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Year toggle buttons
-    yearBtns.forEach(btn => {
-        btn.addEventListener('click', async function() {
-            yearBtns.forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
-            
-            const yearData = this.dataset.year;
-            if (yearData.includes('_')) {
-                const [year, type] = yearData.split('_');
-                currentYear = year;
-                dataType = type;
-            } else {
-                currentYear = yearData;
-                dataType = 'actual';
-            }
+    // Year toggle buttons: one per season in the data, plus the projection year
+    const isProjected = year => projectionYear !== null && String(year) === String(projectionYear);
+    const seasonLabel = year => (isProjected(year) ? `${year} Projected` : String(year));
+
+    function renderYearButtons(seasons) {
+        if (!yearButtonsEl) return;
+        yearButtonsEl.innerHTML = '';
+        const years = projectionYear === null ? seasons : [...seasons, projectionYear];
+        years.forEach(year => {
+            const btn = document.createElement('button');
+            btn.className = 'year-btn';
+            btn.dataset.year = String(year);
+            btn.textContent = seasonLabel(year);
+            btn.setAttribute('aria-label', `Show ${year} ${isProjected(year) ? 'projected ' : ''}stats`);
+            btn.classList.toggle('active', String(year) === currentYear);
+            yearButtonsEl.appendChild(btn);
+        });
+    }
+
+    if (yearButtonsEl) {
+        yearButtonsEl.addEventListener('click', async function(e) {
+            const btn = e.target.closest('.year-btn');
+            if (!btn) return;
+            yearButtonsEl.querySelectorAll('.year-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            currentYear = btn.dataset.year;
             await ensureSeasonLoaded(currentYear);
-            
+
             // Recalculate points for new year selection
             calculatePlayerValues();
         });
-    });
+    }
     
     // Table header sorting - improved with debugging
     const sortableHeaders = playersTable.querySelectorAll('th[data-sort]');
@@ -413,10 +425,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Functions
     async function loadData(filter = 'all') {
         try {
-            // Fetch players with stats from Supabase (initial seasons only)
-            allPlayers = await fetchPlayersWithStats(filter, INITIAL_SEASONS);
+            // Start on the latest season with actual stats; other seasons load when selected
+            const seasonConfig = await getSeasonConfig();
+            projectionYear = seasonConfig.projectionYear;
+            const latestSeason = seasonConfig.seasons[seasonConfig.seasons.length - 1];
+            currentYear = String(latestSeason);
+            renderYearButtons(seasonConfig.seasons);
+
+            allPlayers = await fetchPlayersWithStats(filter, [latestSeason]);
             loadedSeasons.clear();
-            INITIAL_SEASONS.forEach(season => loadedSeasons.add(String(season)));
+            loadedSeasons.add(currentYear);
             
             if (allPlayers.length === 0) {
                 console.warn('No players loaded from Supabase');
@@ -971,7 +989,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (!player) return;
 
-        const cacheKey = `${playerId}-${currentYear}-${dataType}`;
+        const cacheKey = `${playerId}-${currentYear}`;
 
         const modal = document.getElementById('player-card-modal');
         const container = document.getElementById('player-card-container');
@@ -984,14 +1002,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
 
-        // Get current stats based on year and data type
-        const statsKey = {
-            '2024': 'stats_2024',
-            '2025': 'stats_2025_actual',
-            '2026': 'stats_2026_actual',
-            '2027': 'stats_2027_projected'
-        }[currentYear];
-        let stats = player[statsKey];
+        // Get stats for the selected season
+        const seasonStats = player.stats_by_season ? player.stats_by_season[currentYear] : null;
+        let stats = seasonStats ? (player.is_pitcher ? seasonStats.pitching : seasonStats.batting) : null;
 
         if (!stats) {
             stats = {
@@ -1014,7 +1027,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="player-card-stats">
                     ${player.is_pitcher ? `
                         <div class="stats-section">
-                            <h3>Pitching Stats (${currentYear})</h3>
+                            <h3>Pitching Stats (${seasonLabel(currentYear)})</h3>
                             <div class="stats-grid">
                                 <div class="stat-item">
                                     <span class="stat-label">Wins</span>
@@ -1048,7 +1061,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     ` : `
                         <div class="stats-section">
-                            <h3>Batting Stats (${currentYear})</h3>
+                            <h3>Batting Stats (${seasonLabel(currentYear)})</h3>
                             <div class="stats-grid">
                                 <div class="stat-item">
                                     <span class="stat-label">Hits</span>
