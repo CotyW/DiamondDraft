@@ -35,6 +35,8 @@ python fetch_data.py --seasons 2024 2025 2026 --projection-year 2027
 ```
 A full run makes about 1,800 API calls and takes roughly 15 minutes. It writes `data/players.json`, `batters.json`, `pitchers.json` and `last_updated.json`.
 
+Failed requests are retried. If a run still comes back with more than 5% fewer players than `data/players.json`, or 5% fewer players with stats in any season both cover, it leaves the existing files alone and exits with an error, so the daily Action doesn't publish a half-failed fetch. Add `--force` to save anyway.
+
 ### Rolling Over to a New Season
 The season years are set in one place: `DEFAULT_SEASONS` in `fetch_data.py`. Add the new season there (the projection is always the year after the last one) and run the fetch. The page builds its season tabs from `data/last_updated.json`, so nothing else needs editing.
 
