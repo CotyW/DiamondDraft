@@ -27,6 +27,10 @@ PITCHER_POSITIONS = ['P', 'SP', 'RP', 'CL']
 # by "<id>-P", the way fantasy sites list them, since the page ranks batters and pitchers apart
 TWO_WAY_POSITIONS = ['TWP']
 ELIGIBILITY_GAMES = 20  # games at a position in the latest season to be eligible there
+# Refuse to overwrite data/ when a run loses more than this share of players, or of players
+# with stats in a season both files cover. Guards against a half-failed fetch; --force skips it.
+MAX_DROP = 0.05
+FETCH_ATTEMPTS = 3
 SP_START_SHARE = 0.5    # share of appearances that are starts for a pitcher to count as SP
 FIELDING_POSITIONS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'OF']
 FIP_CONSTANT = 3.10
@@ -213,6 +217,54 @@ def fetch_roster(season):
     return list(players.values())
 
 
+def fetch_person(player_id, hydrate):
+    """One player's record from the API, retrying transient failures. None if it can't be had."""
+    for attempt in range(1, FETCH_ATTEMPTS + 1):
+        try:
+            resp = requests.get(f"{BASE_URL}/v1/people/{player_id}?hydrate={hydrate}", timeout=30)
+            if resp.status_code == 200:
+                people = resp.json().get('people')
+                return people[0] if people else None
+            if resp.status_code < 500 and resp.status_code != 429:
+                print(f"Skipping player {player_id}: HTTP {resp.status_code}")
+                return None
+            reason = f"HTTP {resp.status_code}"
+        except requests.RequestException as e:
+            reason = str(e)
+        if attempt < FETCH_ATTEMPTS:
+            time.sleep(2 * attempt)
+    print(f"Skipping player {player_id} after {FETCH_ATTEMPTS} attempts: {reason}")
+    return None
+
+
+def players_with_stats(players, season):
+    """How many players have any non-zero stat in a season."""
+    return sum(1 for p in players if any(p.get('stats', {}).get(str(season), {}).values()))
+
+
+def check_against_existing(players, existing, seasons):
+    """A reason to refuse saving `players` over `existing`, or None if it looks complete.
+
+    Players who leave a roster are carried over from the existing file, so a normal run never
+    has fewer players than before; a drop means fetches failed. The per-season check catches
+    a run where players came back but with empty stats.
+    """
+    if not existing:
+        return None
+    old, new = len(existing), len(players)
+    if new < old * (1 - MAX_DROP):
+        return f"player count fell from {old} to {new}"
+    old_seasons = {s for p in existing for s in p.get('stats', {})}
+    for season in sorted(seasons):
+        if str(season) not in old_seasons:
+            continue  # a season new to this run has nothing to compare against
+        before = players_with_stats(existing, season)
+        after = players_with_stats(players, season)
+        if after < before * (1 - MAX_DROP):
+            return f"players with {season} stats fell from {before} to {after}"
+    return None
+
+
 def build_players(info, person, seasons, projection_year):
     """The data entries for one roster player: one, or two for a two-way player."""
     team = latest_team(person, max(seasons)) or info['team_name']
@@ -244,7 +296,7 @@ def build_players(info, person, seasons, projection_year):
     return entries
 
 
-def fetch_players_data(seasons=None, projection_year=None):
+def fetch_players_data(seasons=None, projection_year=None, force=False):
     """Fetch players and stats from the MLB Stats API and save as JSON files."""
     seasons = seasons or DEFAULT_SEASONS
     projection_year = projection_year or max(seasons) + 1
@@ -276,11 +328,9 @@ def fetch_players_data(seasons=None, projection_year=None):
         players = []
         for idx, info in enumerate(roster):
             try:
-                resp = requests.get(f"{BASE_URL}/v1/people/{info['id']}?hydrate={hydrate}", timeout=30)
-                if resp.status_code != 200 or not resp.json().get('people'):
-                    print(f"Skipping player {info['id']}: HTTP {resp.status_code}")
+                person = fetch_person(info['id'], hydrate)
+                if person is None:
                     continue
-                person = resp.json()['people'][0]
                 players.extend(build_players(info, person, seasons, projection_year))
                 if idx % 100 == 0:
                     print(f"Processed {idx}/{len(roster)} players...")
@@ -291,6 +341,12 @@ def fetch_players_data(seasons=None, projection_year=None):
         if not players:
             print("No players fetched; leaving existing data untouched")
             return False
+        problem = check_against_existing(players, list(existing.values()), seasons)
+        if problem and not force:
+            print(f"Not saving: {problem}. Existing data left untouched; use --force to save anyway.")
+            return False
+        if problem:
+            print(f"Saving despite: {problem} (--force)")
 
         batters = [p for p in players if not p['is_pitcher']]
         pitchers = [p for p in players if p['is_pitcher']]
@@ -329,5 +385,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Update player data from the MLB Stats API")
     parser.add_argument('--seasons', type=int, nargs='+', default=DEFAULT_SEASONS)
     parser.add_argument('--projection-year', type=int)
+    parser.add_argument('--force', action='store_true',
+                        help='save even if the run lost players or stats compared with data/')
     args = parser.parse_args()
-    raise SystemExit(0 if fetch_players_data(args.seasons, args.projection_year) else 1)
+    raise SystemExit(0 if fetch_players_data(args.seasons, args.projection_year, args.force) else 1)
