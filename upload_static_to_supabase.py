@@ -9,8 +9,6 @@ import sys
 
 from dotenv import load_dotenv
 
-SEASONS = {2024: 'stats_2024', 2025: 'stats_2025_actual', 2026: 'stats_2026_actual',
-           2027: 'stats_2027_projected'}
 BATCH = 500
 
 
@@ -25,11 +23,11 @@ def build_records(players):
             'position': p.get('position'),
             'primary_position': p.get('position'),
         })
-        for season, key in SEASONS.items():
-            s = p.get(key)
+        # Every season in the file is uploaded, including the projection year
+        for season, s in p.get('stats', {}).items():
             if not s:
                 continue
-            row = {'player_id': pid, 'season': season}
+            row = {'player_id': pid, 'season': int(season)}
             if p.get('is_pitcher'):
                 row.update(stat_type='pitching', wins=s.get('wins', 0), era=s.get('era', 0),
                            fip=s.get('fip', 0), runs_scored=s.get('runs_scored', 0),

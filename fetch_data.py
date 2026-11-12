@@ -1,9 +1,13 @@
 """Fetch MLB stats and write data/*.json.
 
-Output keys per player: stats_2024, stats_2025_actual, stats_2026_actual and
-stats_2027_projected. Existing players in data/players.json are kept and updated.
+Each player gets a `stats` object keyed by season year, e.g. {"2024": {...}, "2025": {...}}.
+The year after the last season holds the projection. data/last_updated.json records which
+seasons are in the file and which year is the projection; the web page builds its season
+tabs from that, so DEFAULT_SEASONS below is the only place the years are written down.
 
-Usage: python fetch_data.py [--seasons 2024 2025 2026] [--projection-year 2027]
+Existing players in data/players.json are kept and updated.
+
+Usage: python fetch_data.py [--seasons YEAR ...] [--projection-year YEAR]
 """
 import argparse
 import json
@@ -15,6 +19,8 @@ import requests
 
 BASE_URL = "https://statsapi.mlb.com/api"
 DATA_DIR = 'data'
+# The one season setting: completed/current seasons to fetch. The projection is the year after.
+# To roll over to a new season, add it here (and drop the oldest if you like).
 DEFAULT_SEASONS = [2024, 2025, 2026]
 PITCHER_POSITIONS = ['P', 'SP', 'RP', 'CL']
 ELIGIBILITY_GAMES = 20  # games at a position in the latest season to be eligible there
@@ -30,12 +36,6 @@ PITCHING_KEYS = ['wins', 'era', 'strikeouts', 'walks', 'saves', 'runs_scored', '
 RATE_KEYS = {'avg': 3, 'babip': 3, 'era': 2, 'fip': 2, 'ip': 1}
 
 
-def season_key(season, projection_year):
-    if season == projection_year:
-        return f'stats_{season}_projected'
-    return 'stats_2024' if season == 2024 else f'stats_{season}_actual'
-
-
 def empty_stats():
     stats = {k: 0 for k in BATTING_KEYS + PITCHING_KEYS}
     for k in RATE_KEYS:
@@ -48,8 +48,18 @@ def innings_to_float(ip):
     return int(whole or 0) + int(frac or 0) / 3
 
 
+def is_combined_row(split):
+    """True for the extra all-teams row the API adds when a player changed teams mid-season.
+
+    A traded player's season comes back as one row per team plus a combined row (no team,
+    numTeams > 1). Counting both doubles the season, so callers skip the combined row and
+    add up the per-team rows.
+    """
+    return (split.get('numTeams') or 1) > 1
+
+
 def batting_from_splits(splits):
-    """Combine a season's splits (one per team when a player was traded)."""
+    """Combine a season's per-team splits (several when a player was traded)."""
     t = {k: 0 for k in ('ab', 'h', 'hr', 'so', 'sf', 'runs', 'rbi', 'sb')}
     for s in splits:
         st = s['stat']
@@ -115,7 +125,7 @@ def build_player_stats(person, is_pitcher, seasons, projection_year):
         if stat_group['group']['displayName'] != group:
             continue
         for split in stat_group.get('splits', []):
-            if split.get('season') and 'stat' in split:
+            if split.get('season') and 'stat' in split and not is_combined_row(split):
                 by_season.setdefault(int(split['season']), []).append(split)
 
     builder = pitching_from_splits if is_pitcher else batting_from_splits
@@ -124,9 +134,9 @@ def build_player_stats(person, is_pitcher, seasons, projection_year):
         stats = empty_stats()
         if season in by_season:
             stats.update(builder(by_season[season]))
-        result[season_key(season, projection_year)] = stats
+        result[str(season)] = stats
         history.append(stats)
-    result[season_key(projection_year, projection_year)] = project_next_season(history[::-1], is_pitcher)
+    result[str(projection_year)] = project_next_season(history[::-1], is_pitcher)
     return result
 
 
@@ -141,6 +151,8 @@ def eligible_positions(person, season, roster_position, min_games=ELIGIBILITY_GA
             continue
         for split in stat_group.get('splits', []):
             pos = split.get('position', {}).get('abbreviation')
+            if is_combined_row(split):
+                continue
             if split.get('season') == str(season) and pos in FIELDING_POSITIONS:
                 games[pos] = games.get(pos, 0) + int(split.get('stat', {}).get('gamesPlayed', 0) or 0)
     eligible = [p for p, g in sorted(games.items(), key=lambda x: -x[1]) if g >= min_games]
@@ -157,7 +169,7 @@ def pitcher_role(person, seasons):
             if stat_group['group']['displayName'] != 'pitching':
                 continue
             for split in stat_group.get('splits', []):
-                if split.get('season') == str(season):
+                if split.get('season') == str(season) and not is_combined_row(split):
                     st = split.get('stat', {})
                     games += int(st.get('gamesPlayed', 0) or 0)
                     starts += int(st.get('gamesStarted', 0) or 0)
@@ -244,7 +256,7 @@ def fetch_players_data(seasons=None, projection_year=None):
                     'primary_position': positions[0],
                     'is_pitcher': is_pitcher,
                 }
-                player.update(build_player_stats(person, is_pitcher, seasons, projection_year))
+                player['stats'] = build_player_stats(person, is_pitcher, seasons, projection_year)
                 players.append(player)
                 if idx % 100 == 0:
                     print(f"Processed {idx}/{len(roster)} players...")
@@ -267,7 +279,7 @@ def fetch_players_data(seasons=None, projection_year=None):
                 'total_players': len(players),
                 'batters': len(batters),
                 'pitchers': len(pitchers),
-                'seasons': seasons,
+                'seasons': sorted(seasons),
                 'projection_year': projection_year,
             }, f)
         print(f"Saved {len(players)} players ({len(batters)} batters, {len(pitchers)} pitchers)")

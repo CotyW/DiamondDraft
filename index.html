@@ -91,12 +91,8 @@
             <div class="options-row">
                 <div class="year-toggle">
                     <label>Stats Year:</label>
-                    <div class="toggle-buttons">
-                        <button class="year-btn active" data-year="2024" aria-label="Show 2024 stats">2024</button>
-                        <button class="year-btn" data-year="2025_actual" aria-label="Show 2025 stats">2025</button>
-                        <button class="year-btn" data-year="2026_actual" aria-label="Show 2026 stats">2026</button>
-                        <button class="year-btn" data-year="2027_projected" aria-label="Show 2027 projected stats">2027 Projected</button>
-                    </div>
+                    <!-- Season buttons are built by main.js from data/last_updated.json -->
+                    <div class="toggle-buttons" id="year-buttons"></div>
                 </div>
                 
                 <div class="filter-section">
