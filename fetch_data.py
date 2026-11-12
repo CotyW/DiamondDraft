@@ -23,6 +23,9 @@ DATA_DIR = 'data'
 # To roll over to a new season, add it here (and drop the oldest if you like).
 DEFAULT_SEASONS = [2024, 2025, 2026]
 PITCHER_POSITIONS = ['P', 'SP', 'RP', 'CL']
+# Two-way players (Ohtani) get two entries: a batter keyed by MLB id and a pitcher keyed
+# by "<id>-P", the way fantasy sites list them, since the page ranks batters and pitchers apart
+TWO_WAY_POSITIONS = ['TWP']
 ELIGIBILITY_GAMES = 20  # games at a position in the latest season to be eligible there
 SP_START_SHARE = 0.5    # share of appearances that are starts for a pitcher to count as SP
 FIELDING_POSITIONS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'OF']
@@ -210,6 +213,37 @@ def fetch_roster(season):
     return list(players.values())
 
 
+def build_players(info, person, seasons, projection_year):
+    """The data entries for one roster player: one, or two for a two-way player."""
+    team = latest_team(person, max(seasons)) or info['team_name']
+    two_way = info['position'] in TWO_WAY_POSITIONS
+    if two_way:
+        roles = [False, True]  # batter, then pitcher
+    else:
+        roles = [info['position'] in PITCHER_POSITIONS]
+
+    entries = []
+    for is_pitcher in roles:
+        if is_pitcher:
+            positions = [pitcher_role(person, seasons)]
+        else:
+            positions = eligible_positions(person, max(seasons), 'DH' if two_way else info['position'])
+        player = {
+            'id': f"{info['id']}-P" if two_way and is_pitcher else info['id'],
+            'name': info['full_name'],
+            'team': team,
+            'position': '/'.join(positions),
+            'primary_position': positions[0],
+            'is_pitcher': is_pitcher,
+        }
+        if two_way:
+            player['two_way'] = True
+            player['mlb_id'] = info['id']
+        player['stats'] = build_player_stats(person, is_pitcher, seasons, projection_year)
+        entries.append(player)
+    return entries
+
+
 def fetch_players_data(seasons=None, projection_year=None):
     """Fetch players and stats from the MLB Stats API and save as JSON files."""
     seasons = seasons or DEFAULT_SEASONS
@@ -228,11 +262,15 @@ def fetch_players_data(seasons=None, projection_year=None):
 
         # Keep players from earlier data who are no longer on a roster
         roster_ids = {p['id'] for p in roster}
-        for pid, old in existing.items():
-            if pid not in roster_ids:
-                roster.append({'id': pid, 'full_name': old['name'],
-                               'position': old.get('primary_position') or old.get('position', '').split('/')[0],
-                               'team_name': old.get('team', '')})
+        for old in existing.values():
+            pid = old.get('mlb_id', old['id'])  # a two-way pitcher entry's id is "<id>-P"
+            if pid in roster_ids:
+                continue
+            roster_ids.add(pid)
+            position = 'TWP' if old.get('two_way') else (
+                old.get('primary_position') or old.get('position', '').split('/')[0])
+            roster.append({'id': pid, 'full_name': old['name'], 'position': position,
+                           'team_name': old.get('team', '')})
 
         hydrate = "stats(group=[hitting,pitching,fielding],type=[yearByYear])"
         players = []
@@ -243,21 +281,7 @@ def fetch_players_data(seasons=None, projection_year=None):
                     print(f"Skipping player {info['id']}: HTTP {resp.status_code}")
                     continue
                 person = resp.json()['people'][0]
-                is_pitcher = info['position'] in PITCHER_POSITIONS
-                if is_pitcher:
-                    positions = [pitcher_role(person, seasons)]
-                else:
-                    positions = eligible_positions(person, max(seasons), info['position'])
-                player = {
-                    'id': info['id'],
-                    'name': info['full_name'],
-                    'team': latest_team(person, max(seasons)) or info['team_name'],
-                    'position': '/'.join(positions),
-                    'primary_position': positions[0],
-                    'is_pitcher': is_pitcher,
-                }
-                player['stats'] = build_player_stats(person, is_pitcher, seasons, projection_year)
-                players.append(player)
+                players.extend(build_players(info, person, seasons, projection_year))
                 if idx % 100 == 0:
                     print(f"Processed {idx}/{len(roster)} players...")
                 time.sleep(0.05)
