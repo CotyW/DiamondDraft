@@ -1,184 +1,83 @@
-// Player comparison modal logic
+// Player comparison modal: two players side by side, with the better value in each stat marked.
+// Stats come from static/stats.js, the same list the table and player card use.
 document.addEventListener('DOMContentLoaded', function() {
-    // Only run if the players table exists
     const playersTable = document.getElementById('players-table');
-    const playersBody = document.getElementById('players-body');
-    if (!playersTable || !playersBody) return;
+    if (!playersTable) return;
+    const S = window.DDStats;
 
-    // Show comparison modal with enhanced stat differences
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    function statsFor(player, year) {
+        const season = player.stats_by_season ? player.stats_by_season[year] : null;
+        return (season && (player.is_pitcher ? season.pitching : season.batting)) || {};
+    }
+
+    // Class and "(+n)" suffix for one player's value against the other's
+    function compare(def, mine, theirs) {
+        if (theirs === undefined || mine === theirs) return { cls: '', diff: '' };
+        const better = def.lower ? mine < theirs : mine > theirs;
+        const gap = Math.abs(mine - theirs);
+        const shown = def.key ? S.format(gap, def) : String(Math.round(gap * 100) / 100);
+        return { cls: better ? 'stat-better' : 'stat-worse', diff: ` (${better ? '+' : '-'}${shown})` };
+    }
+
     window.showComparisonModal = function(playerIds, allPlayersData, currentYear) {
         const modal = document.getElementById('comparison-tool');
         const container = document.getElementById('comparison-container');
         container.innerHTML = '';
-        
-        // Get player data from allPlayersData array based on IDs
-        const players = playerIds.map(playerId => {
-            const player = allPlayersData.find(p => String(p.player_id) === String(playerId) || String(p.id) === String(playerId));
-            if (!player) return null;
-            
-            // Get stats for current year
-            const seasonStats = player.stats_by_season ? player.stats_by_season[currentYear] : null;
-            const battingStats = seasonStats ? seasonStats.batting : {};
-            const pitchingStats = seasonStats ? seasonStats.pitching : {};
-            
-            return {
-                name: player.name || '',
-                team: player.team || '',
-                position: player.position || '',
-                stats: {
-                    hits: battingStats.hits || 0,
-                    avg: battingStats.avg || 0,
-                    babip: 0, // Not in Supabase yet
-                    runs: battingStats.runs || 0,
-                    rbi: battingStats.rbi || 0,
-                    steals: battingStats.steals || 0,
-                    hr: battingStats.hr || 0,
-                    wins: pitchingStats.wins || 0,
-                    runs_scored: pitchingStats.era || 0, // Using ERA as proxy
-                    era: pitchingStats.era || 0,
-                    fip: 0, // Not in Supabase yet
-                    strikeouts: pitchingStats.strikeouts || 0,
-                    walks: pitchingStats.walks || 0,
-                    saves: pitchingStats.saves || 0,
-                    points: player.points || 0
-                }
-            };
-        }).filter(p => p !== null);
-        
+
+        const players = playerIds.map(id => allPlayersData.find(p =>
+            String(p.player_id) === String(id) || String(p.id) === String(id))).filter(Boolean);
         if (players.length < 2) {
             container.innerHTML = '<p>Unable to load player data for comparison.</p>';
             modal.style.display = 'block';
             return;
         }
 
-        // Helper function to compare stats and return formatted string with difference
-        function compareStats(statName, player1Value, player2Value, lowerIsBetter = false) {
-            const diff = player1Value - player2Value;
-            const absDiff = Math.abs(diff);
-            
-            // Handle special cases where "-" appears in data
-            if (isNaN(player1Value) || isNaN(player2Value)) {
-                return {
-                    player1: { value: player1Value, class: '', diff: '' },
-                    player2: { value: player2Value, class: '', diff: '' }
-                };
-            }
+        // Points shown in the table were calculated on the page's own copies of the players
+        const shown = window.DDState ? window.DDState.players : [];
+        const pointsOf = p => (shown.find(x => String(x.id) === String(p.id)) || p).points || 0;
+        const stats = players.map(p => statsFor(p, currentYear));
+        const groups = players.map(p => S.groupOf(p));
+        const pointsDef = {}; // plain number: points can be fractional with fractional weights
 
-            let player1Class = '';
-            let player2Class = '';
-            
-            if (diff !== 0) {
-                if (lowerIsBetter) {
-                    // For stats like ERA, FIP, Walks where lower is better
-                    player1Class = diff < 0 ? 'stat-better' : 'stat-worse';
-                    player2Class = diff < 0 ? 'stat-worse' : 'stat-better';
-                } else {
-                    // For most stats where higher is better
-                    player1Class = diff > 0 ? 'stat-better' : 'stat-worse';
-                    player2Class = diff > 0 ? 'stat-worse' : 'stat-better';
-                }
-            }
+        players.forEach((player, i) => {
+            const other = 1 - i;
+            const group = groups[i];
+            const sameKind = groups[other] === group;
+            const items = S.groups[group].map(def => {
+                const mine = Number(stats[i][def.key]) || 0;
+                const theirs = sameKind ? Number(stats[other][def.key]) || 0 : undefined;
+                const c = compare(def, mine, theirs);
+                return `<li>${esc(def.name)}: <span class="${c.cls}">${S.format(mine, def)}${c.diff}</span></li>`;
+            }).join('');
+            const pts = compare(pointsDef, pointsOf(player), pointsOf(players[other]));
 
-            // Format the difference display
-            const formatDiff = (value, isWinner) => {
-                if (absDiff === 0) return '';
-                const sign = isWinner ? '+' : '-';
-                
-                // Format based on stat type
-                if (['avg', 'babip', 'era', 'fip'].includes(statName)) {
-                    return ` (${sign}${absDiff.toFixed(3)})`;
-                } else {
-                    return ` (${sign}${Math.round(absDiff)})`;
-                }
-            };
-
-            return {
-                player1: {
-                    value: ['avg', 'babip', 'era', 'fip'].includes(statName) ? player1Value.toFixed(3) : Math.round(player1Value),
-                    class: player1Class,
-                    diff: formatDiff(absDiff, player1Class === 'stat-better')
-                },
-                player2: {
-                    value: ['avg', 'babip', 'era', 'fip'].includes(statName) ? player2Value.toFixed(3) : Math.round(player2Value),
-                    class: player2Class,
-                    diff: formatDiff(absDiff, player2Class === 'stat-better')
-                }
-            };
-        }
-
-        // Create comparison cards
-        const statComparisons = {
-            hits: compareStats('hits', players[0].stats.hits, players[1].stats.hits),
-            avg: compareStats('avg', players[0].stats.avg, players[1].stats.avg),
-            babip: compareStats('babip', players[0].stats.babip, players[1].stats.babip),
-            runs: compareStats('runs', players[0].stats.runs, players[1].stats.runs),
-            rbi: compareStats('rbi', players[0].stats.rbi, players[1].stats.rbi),
-            steals: compareStats('steals', players[0].stats.steals, players[1].stats.steals),
-            hr: compareStats('hr', players[0].stats.hr, players[1].stats.hr),
-            wins: compareStats('wins', players[0].stats.wins, players[1].stats.wins),
-            runs_scored: compareStats('runs_scored', players[0].stats.runs_scored, players[1].stats.runs_scored),
-            era: compareStats('era', players[0].stats.era, players[1].stats.era, true),
-            fip: compareStats('fip', players[0].stats.fip, players[1].stats.fip, true),
-            strikeouts: compareStats('strikeouts', players[0].stats.strikeouts, players[1].stats.strikeouts),
-            walks: compareStats('walks', players[0].stats.walks, players[1].stats.walks, true),
-            saves: compareStats('saves', players[0].stats.saves, players[1].stats.saves),
-            points: compareStats('points', players[0].stats.points, players[1].stats.points)
-        };
-
-        // Create player cards with comparisons
-        players.forEach((player, index) => {
             const card = document.createElement('div');
             card.className = 'comparison-card';
-            
-            const otherIndex = index === 0 ? 1 : 0;
-            const isPlayer1 = index === 0;
-            
             card.innerHTML = `
                 <div class="comparison-header">
-                    <h3 class="comparison-player-name">${player.name}</h3>
+                    <h3 class="comparison-player-name">${esc(player.name)}</h3>
                     <div class="comparison-player-info">
-                        <span class="comparison-team">${player.team}</span>
-                        <span class="comparison-position">${player.position}</span>
+                        <span class="comparison-team">${esc(player.team)}</span>
+                        <span class="comparison-position">${esc(player.position)}</span>
                     </div>
                 </div>
                 <div class="comparison-stats">
                     <div class="comparison-section">
-                        <h4>Batting Stats</h4>
-                        <ul class="comparison-stat-list">
-                            <li>Hits: <span class="${isPlayer1 ? statComparisons.hits.player1.class : statComparisons.hits.player2.class}">${isPlayer1 ? statComparisons.hits.player1.value : statComparisons.hits.player2.value}${isPlayer1 ? statComparisons.hits.player1.diff : statComparisons.hits.player2.diff}</span></li>
-                            <li>AVG: <span class="${isPlayer1 ? statComparisons.avg.player1.class : statComparisons.avg.player2.class}">${isPlayer1 ? statComparisons.avg.player1.value : statComparisons.avg.player2.value}${isPlayer1 ? statComparisons.avg.player1.diff : statComparisons.avg.player2.diff}</span></li>
-                            <li>BABIP: <span class="${isPlayer1 ? statComparisons.babip.player1.class : statComparisons.babip.player2.class}">${isPlayer1 ? statComparisons.babip.player1.value : statComparisons.babip.player2.value}${isPlayer1 ? statComparisons.babip.player1.diff : statComparisons.babip.player2.diff}</span></li>
-                            <li>Runs: <span class="${isPlayer1 ? statComparisons.runs.player1.class : statComparisons.runs.player2.class}">${isPlayer1 ? statComparisons.runs.player1.value : statComparisons.runs.player2.value}${isPlayer1 ? statComparisons.runs.player1.diff : statComparisons.runs.player2.diff}</span></li>
-                            <li>RBI: <span class="${isPlayer1 ? statComparisons.rbi.player1.class : statComparisons.rbi.player2.class}">${isPlayer1 ? statComparisons.rbi.player1.value : statComparisons.rbi.player2.value}${isPlayer1 ? statComparisons.rbi.player1.diff : statComparisons.rbi.player2.diff}</span></li>
-                            <li>Steals: <span class="${isPlayer1 ? statComparisons.steals.player1.class : statComparisons.steals.player2.class}">${isPlayer1 ? statComparisons.steals.player1.value : statComparisons.steals.player2.value}${isPlayer1 ? statComparisons.steals.player1.diff : statComparisons.steals.player2.diff}</span></li>
-                            <li>Home Runs: <span class="${isPlayer1 ? statComparisons.hr.player1.class : statComparisons.hr.player2.class}">${isPlayer1 ? statComparisons.hr.player1.value : statComparisons.hr.player2.value}${isPlayer1 ? statComparisons.hr.player1.diff : statComparisons.hr.player2.diff}</span></li>
-                        </ul>
-                    </div>
-                    <div class="comparison-section">
-                        <h4>Pitching Stats</h4>
-                        <ul class="comparison-stat-list">
-                            <li>Wins: <span class="${isPlayer1 ? statComparisons.wins.player1.class : statComparisons.wins.player2.class}">${isPlayer1 ? statComparisons.wins.player1.value : statComparisons.wins.player2.value}${isPlayer1 ? statComparisons.wins.player1.diff : statComparisons.wins.player2.diff}</span></li>
-                            <li>Runs Scored: <span class="${isPlayer1 ? statComparisons.runs_scored.player1.class : statComparisons.runs_scored.player2.class}">${isPlayer1 ? statComparisons.runs_scored.player1.value : statComparisons.runs_scored.player2.value}${isPlayer1 ? statComparisons.runs_scored.player1.diff : statComparisons.runs_scored.player2.diff}</span></li>
-                            <li>ERA: <span class="${isPlayer1 ? statComparisons.era.player1.class : statComparisons.era.player2.class}">${isPlayer1 ? statComparisons.era.player1.value : statComparisons.era.player2.value}${isPlayer1 ? statComparisons.era.player1.diff : statComparisons.era.player2.diff}</span></li>
-                            <li>FIP: <span class="${isPlayer1 ? statComparisons.fip.player1.class : statComparisons.fip.player2.class}">${isPlayer1 ? statComparisons.fip.player1.value : statComparisons.fip.player2.value}${isPlayer1 ? statComparisons.fip.player1.diff : statComparisons.fip.player2.diff}</span></li>
-                            <li>Strikeouts: <span class="${isPlayer1 ? statComparisons.strikeouts.player1.class : statComparisons.strikeouts.player2.class}">${isPlayer1 ? statComparisons.strikeouts.player1.value : statComparisons.strikeouts.player2.value}${isPlayer1 ? statComparisons.strikeouts.player1.diff : statComparisons.strikeouts.player2.diff}</span></li>
-                            <li>Walks: <span class="${isPlayer1 ? statComparisons.walks.player1.class : statComparisons.walks.player2.class}">${isPlayer1 ? statComparisons.walks.player1.value : statComparisons.walks.player2.value}${isPlayer1 ? statComparisons.walks.player1.diff : statComparisons.walks.player2.diff}</span></li>
-                            <li>Saves: <span class="${isPlayer1 ? statComparisons.saves.player1.class : statComparisons.saves.player2.class}">${isPlayer1 ? statComparisons.saves.player1.value : statComparisons.saves.player2.value}${isPlayer1 ? statComparisons.saves.player1.diff : statComparisons.saves.player2.diff}</span></li>
-                        </ul>
+                        <h4>${group === 'pit' ? 'Pitching' : 'Batting'} Stats</h4>
+                        <ul class="comparison-stat-list">${items}</ul>
                     </div>
                     <div class="comparison-section comparison-points">
                         <h4>Fantasy Points</h4>
                         <div class="points-comparison">
-                            <span class="points-value ${isPlayer1 ? statComparisons.points.player1.class : statComparisons.points.player2.class}">
-                                ${isPlayer1 ? statComparisons.points.player1.value : statComparisons.points.player2.value}${isPlayer1 ? statComparisons.points.player1.diff : statComparisons.points.player2.diff}
-                            </span>
+                            <span class="points-value ${pts.cls}">${pointsOf(player)}${pts.diff}</span>
                         </div>
                     </div>
-                </div>
-            `;
+                </div>`;
             container.appendChild(card);
         });
-        
+
         modal.style.display = 'block';
     };
 

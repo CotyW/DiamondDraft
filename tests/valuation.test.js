@@ -246,6 +246,71 @@ test('a two-way player is valued separately as a batter and as a pitcher', () =>
     assert.equal(byId(V.analyze([bat, pit, ...league()], YEAR), pit).pos, 'P');
 });
 
+// ---- Newer categories (OBP, SLG, OPS, K, holds, K/9, ...) ----
+
+const FULL_BAT = { pa: 600, ab: 540, hits: 140, doubles: 28, triples: 2, hr: 20, bb: 50, hbp: 5, sf: 5, so: 130, tb: 232, ops: 0.75 };
+const fullBatter = (pos, stats) => batter(pos, { ...FULL_BAT, ...stats });
+const fullLeague = () => league().map(p => {
+    if (p.is_pitcher) Object.assign(p.stats_by_season[YEAR].pitching, { holds: 5, losses: 8 });
+    else Object.assign(p.stats_by_season[YEAR].batting, FULL_BAT);
+    return p;
+});
+
+test('OBP rewards walks; it is weighted by plate appearances', () => {
+    const patient = fullBatter('1B', { bb: 100 });
+    const hacker = fullBatter('1B', { bb: 15 });
+    const sel = { selected: { bat: ['obp'], pit: ['era'] } };
+    const r = V.analyze([patient, hacker, ...fullLeague()], YEAR, sel);
+    assert.ok(byId(r, patient).z.obp > byId(r, hacker).z.obp);
+});
+
+test('batter strikeouts count against a player', () => {
+    const contact = fullBatter('1B', { so: 60 });
+    const whiffs = fullBatter('1B', { so: 200 });
+    const r = V.analyze([contact, whiffs, ...fullLeague()], YEAR, { selected: { bat: ['so'], pit: ['era'] } });
+    assert.ok(byId(r, contact).z.so > byId(r, whiffs).z.so);
+});
+
+test('SLG, OPS and total bases favor the slugger', () => {
+    const slugger = fullBatter('1B', { tb: 330, ops: 0.95 });
+    const slap = fullBatter('1B', { tb: 180, ops: 0.62 });
+    const r = V.analyze([slugger, slap, ...fullLeague()], YEAR, { selected: { bat: ['slg', 'ops', 'tb'], pit: ['era'] } });
+    for (const k of ['slg', 'ops', 'tb']) assert.ok(byId(r, slugger).z[k] > byId(r, slap).z[k], k);
+});
+
+test('SV+HLD credits setup men; K/9 is a rate weighted by innings', () => {
+    const setup = pitcher('RP', { ip: 65, saves: 2, holds: 30, strikeouts: 80 });
+    const mopup = pitcher('RP', { ip: 65, saves: 0, holds: 1, strikeouts: 50 });
+    const r = V.analyze([setup, mopup, ...fullLeague()], YEAR, { selected: { bat: ['hr'], pit: ['svhd', 'k9'] } });
+    assert.ok(byId(r, setup).z.svhd > byId(r, mopup).z.svhd);
+    assert.ok(byId(r, setup).z.k9 > byId(r, mopup).z.k9);
+});
+
+test('losses count against a pitcher', () => {
+    const a = pitcher('SP', { losses: 4 }), b = pitcher('SP', { losses: 15 });
+    const r = V.analyze([a, b, ...fullLeague()], YEAR, { selected: { bat: ['hr'], pit: ['losses'] } });
+    assert.ok(byId(r, a).z.losses > byId(r, b).z.losses);
+});
+
+test('a category is dropped when the data lacks the stats it needs', () => {
+    // league() has no PA, walks or holds, as in older data
+    const r = V.analyze(league(), YEAR, { selected: { bat: ['hr', 'obp', 'ops'], pit: ['wins', 'holds'] } });
+    const b = r.rows.find(x => !x.isPitcher), p = r.rows.find(x => x.isPitcher);
+    assert.deepEqual(Object.keys(b.z), ['hr']);
+    assert.deepEqual(Object.keys(p.z), ['wins']);
+    assert.ok(r.rows.every(x => Number.isFinite(x.raw)));
+});
+
+test('points format: drivers use the per-group Scoring Weights', () => {
+    const players = league().map((p, i) => ({ ...p, points: 100 + i }));
+    const r = V.analyze(players, YEAR, { format: 'points', pointWeights: { bat: { hr: 4 }, pit: { wins: 5 } } });
+    const hr = r.categories.bat.find(c => c.key === 'hr');
+    const runs = r.categories.bat.find(c => c.key === 'runs');
+    assert.equal(hr.inLeague, true);
+    assert.equal(runs.inLeague, false);
+    assert.equal(r.categories.pit.find(c => c.key === 'wins').inLeague, true);
+});
+
 // ---- Board ordering and tiers ----
 
 test('board is ranked 1..n by value, highest first', () => {
