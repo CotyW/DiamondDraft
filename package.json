@@ -3,6 +3,6 @@
   "private": true,
   "description": "No dependencies or build step; this file only defines the test command.",
   "scripts": {
-    "test": "node --test \"tests/**/*.test.js\""
+    "test": "node --test \"tests/**/*.test.js\" && python -m unittest discover tests"
   }
 }

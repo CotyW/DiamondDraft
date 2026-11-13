@@ -77,12 +77,32 @@ document.addEventListener('DOMContentLoaded', function() {
         return value || 'all';
     }
     
-    // Get all scoring input elements
-    const scoringInputs = [
-        'hits', 'runs', 'rbi', 'steals', 'hr', 
-        'wins', 'runs_scored', 'strikeouts', 'walks', 'saves'
-    ].map(id => document.getElementById(id));
-    
+    // Stat definitions shared by the table, player card, comparison and scoring inputs
+    const S = window.DDStats;
+
+    // Scoring Weights: one input per scorable stat, ids like "w-bat-hr"
+    function renderWeightInputs() {
+        ['bat', 'pit'].forEach(group => {
+            const el = document.getElementById(`weights-${group}`);
+            if (!el) return;
+            el.innerHTML = S.scorable(group).map(s => `
+                <div class="input-group">
+                    <label for="w-${group}-${s.key}">${s.name}:</label>
+                    <input type="number" id="w-${group}-${s.key}" data-group="${group}" data-stat="${s.key}" value="${s.points}" step="0.1">
+                </div>`).join('');
+        });
+    }
+    renderWeightInputs();
+
+    function readWeights() {
+        const w = S.defaultWeights();
+        document.querySelectorAll('.weight-inputs input[data-stat]').forEach(input => {
+            w[input.dataset.group][input.dataset.stat] = parseFloat(input.value) || 0;
+        });
+        return w;
+    }
+    window.DDReadWeights = readWeights; // the analysis panel reads these for points leagues
+
     // Header scroll state
     const handleHeaderScroll = () => {
         if (!siteHeader) return;
@@ -354,74 +374,46 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Table header sorting - improved with debugging
-    const sortableHeaders = playersTable.querySelectorAll('th[data-sort]');
-    console.log(`Found ${sortableHeaders.length} sortable headers`);
-    
-    sortableHeaders.forEach(th => {
-        // Add visual indicator that header is clickable
-        th.style.cursor = 'pointer';
-        
-        // Clean up and re-add event listener to prevent duplicates
-        const oldTh = th.cloneNode(true);
-        th.parentNode.replaceChild(oldTh, th);
-        
-        oldTh.addEventListener('click', function() {
-            console.log(`Sorting by: ${this.dataset.sort}`);
-            const column = this.dataset.sort;
-            
-            // Clear previous sort indicators
-            playersTable.querySelectorAll('th').forEach(header => {
-                header.classList.remove('sort-asc', 'sort-desc');
-            });
-            
-            // If clicking the same column, reverse the direction
+    // Table header: built per view from the stat definitions; clicks are handled on the <thead>
+    const headRow = document.getElementById('players-head');
+    let tableColumns = S.columns('all');
+
+    function renderHeader(view) {
+        tableColumns = S.columns(view);
+        if (!headRow) return;
+        const th = (sort, label, cls = '', title = '') =>
+            `<th data-sort="${sort}" class="${cls}"${title ? ` title="${title}"` : ''} style="cursor:pointer">${label}</th>`;
+        headRow.innerHTML = [
+            th('name', 'Player Name'),
+            th('team', 'Team', 'team-column'),
+            th('position', 'POS', 'position-column'),
+            ...tableColumns.map(c => th(c.key, c.label, c.group === 'pit' ? 'pitching-stat' : 'batting-stat', c.name)),
+            th('points', 'Points', 'points-column'),
+            '<th>Select</th>'
+        ].join('');
+        const active = headRow.querySelector(`th[data-sort="${currentSort.column}"]`);
+        if (active) active.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+    }
+
+    if (playersTable.tHead) {
+        playersTable.tHead.addEventListener('click', e => {
+            const header = e.target.closest('th[data-sort]');
+            if (!header) return;
+            const column = header.dataset.sort;
             if (currentSort.column === column) {
                 currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
             } else {
                 currentSort.column = column;
-                currentSort.direction = 'desc'; // Default to descending
+                // Best first: ascending for stats where lower is better (ERA, strikeouts, ...)
+                const def = tableColumns.find(c => c.key === column);
+                currentSort.direction = def && def.lower ? 'asc' : 'desc';
             }
-            
-            console.log(`Sort direction: ${currentSort.direction}`);
-            
-            // Add sort indicator to the clicked header
-            this.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
-            
-            // Force browser to recognize style changes (sometimes needed)
-            this.offsetHeight;
-            
+            playersTable.querySelectorAll('th').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+            header.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
             sortAndDisplayPlayers();
         });
-    });
-    
-    // Helper function to get the index of the currently sorted column
-    function getSortColumnIndex(columnName) {
-        // Map column names to their index in the table
-        const columnMap = {
-            'name': 0,
-            'team': 1,
-            'position': 2,
-            'hits': 3,
-            'avg': 4,
-            'babip': 5,
-            'runs': 6,
-            'rbi': 7,
-            'steals': 8,
-            'hr': 9,
-            'wins': 10,
-            'runs_scored': 11,
-            'era': 12,
-            'fip': 13,
-            'strikeouts': 14,
-            'walks': 15,
-            'saves': 16,
-            'points': 17
-        };
-        
-        return columnMap[columnName] !== undefined ? columnMap[columnName] : -1;
     }
-    
+
     // Functions
     async function loadData(filter = 'all') {
         try {
@@ -511,54 +503,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function calculatePlayerValues() {
-        // Get weights from input fields
-        const weights = {};
-        scoringInputs.forEach(input => {
-            weights[input.id] = parseFloat(input.value) || 0;
-        });
-        
-        // Calculate points for each player
+        const weights = readWeights();
         displayedPlayers = allPlayers.map(player => {
-            const playerCopy = {...player};
-            
-            // Pick stats for selected year
+            const group = S.groupOf(player);
             const seasonStats = player.stats_by_season ? player.stats_by_season[currentYear] : null;
-            let stats;
-            let points = 0;
-            
-            // Calculate points based on player type
-            if (!player.is_pitcher) {  // Batter
-                stats = seasonStats ? seasonStats.batting : {};
-                points += (stats.hits || 0) * weights.hits;
-                points += (stats.runs || 0) * weights.runs;
-                points += (stats.rbi || 0) * weights.rbi;
-                points += (stats.steals || 0) * weights.steals;
-                points += (stats.hr || 0) * weights.hr;
-            } else {  // Pitcher
-                stats = seasonStats ? seasonStats.pitching : {};
-                points += (stats.wins || 0) * weights.wins;
-                // For runs_scored (ERA proxy), lower is better, so we invert
-                if (weights.runs_scored !== 0) {
-                    points += (50 - (stats.era || 0)) * weights.runs_scored / 10;
-                }
-                points += (stats.strikeouts || 0) * weights.strikeouts;
-                // For walks, lower is better, so we invert
-                if (weights.walks !== 0) {
-                    points += (100 - (stats.walks || 0)) * weights.walks / 100;
-                }
-                points += (stats.saves || 0) * weights.saves;
-            }
-            
-            // Add points to the result
-            playerCopy.points = Math.round(points * 100) / 100;
-            return playerCopy;
+            const stats = seasonStats ? (group === 'pit' ? seasonStats.pitching : seasonStats.batting) : {};
+            return { ...player, points: S.points(stats, group, weights) };
         });
-        
-        // Apply filters and display
+
         filterAndDisplayPlayers();
         document.dispatchEvent(new CustomEvent('dd:players-updated'));
     }
-    
+
     // Read-only view of page state for the draft analysis panel
     window.DDState = {
         get players() { return displayedPlayers; },
@@ -629,6 +585,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Display filtered & sorted players
         const viewFilter = normalizeViewFilter(filterValue);
+        renderHeader(viewFilter);
         renderPlayersTable(filteredPlayers, viewFilter);
     }
 
@@ -654,99 +611,38 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function updateColumnVisibility(filter = 'all') {
-        // Get all header elements
-        const battingHeaders = document.querySelectorAll('th.batting-stat');
-        const pitchingHeaders = document.querySelectorAll('th.pitching-stat');
-        
-        // Handle header visibility based on filter
-        if (filter === 'batter') {
-            // Show batting headers, hide pitching headers
-            battingHeaders.forEach(header => header.style.display = 'table-cell');
-            pitchingHeaders.forEach(header => header.style.display = 'none');
-        } else if (filter === 'pitcher') {
-            // Show pitching headers, hide batting headers
-            battingHeaders.forEach(header => header.style.display = 'none');
-            pitchingHeaders.forEach(header => header.style.display = 'table-cell');
-        } else {
-            // Show all headers in "all players" view
-            battingHeaders.forEach(header => header.style.display = 'table-cell');
-            pitchingHeaders.forEach(header => header.style.display = 'table-cell');
-        }
+        renderHeader(normalizeViewFilter(filter));
     }
-    
+
     function sortPlayers(players) {
-        console.log(`Sorting ${players.length} players by ${currentSort.column} (${currentSort.direction})`);
-        
-        // Create a copy to avoid modifying the original array
-        const sortedPlayers = [...players];
-        
-        sortedPlayers.sort((a, b) => {
-            let aValue, bValue;
-            
-            if (currentSort.column === 'name' || currentSort.column === 'team' || currentSort.column === 'position') {
-                aValue = a[currentSort.column] || '';
-                bValue = b[currentSort.column] || '';
-            } else if (currentSort.column === 'points') {
-                aValue = a.points || 0;
-                bValue = b.points || 0;
-            } else {
-                const aSeason = a.stats_by_season ? a.stats_by_season[currentYear] : null;
-                const bSeason = b.stats_by_season ? b.stats_by_season[currentYear] : null;
-                const aStats = (a.is_pitcher ? aSeason?.pitching : aSeason?.batting) || {};
-                const bStats = (b.is_pitcher ? bSeason?.pitching : bSeason?.batting) || {};
-                
-                aValue = aStats[currentSort.column] || 0;
-                bValue = bStats[currentSort.column] || 0;
-            }
-            
-            // Null/undefined check
-            if (aValue === null || aValue === undefined) aValue = 0;
-            if (bValue === null || bValue === undefined) bValue = 0;
-            
-            // Log a few examples of the sorting values (avoid flooding the console)
-            if (Math.random() < 0.01) {
-                console.log(`Sorting example: ${a.name} (${aValue}) vs ${b.name} (${bValue})`);
-            }
-            
-            // Handle special cases for sorting
-            if ((currentSort.column === 'era' || currentSort.column === 'fip') && aValue > 0 && bValue > 0) {
-                // For ERA and FIP, lower is better, so reverse the comparison
-                return currentSort.direction === 'asc' ? 
-                    aValue - bValue : bValue - aValue;
-            }
-            
-            // Standard sorting
-            let result;
-            if (typeof aValue === 'string') {
-                result = currentSort.direction === 'asc' ? 
-                    aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
-            } else {
-                result = currentSort.direction === 'asc' ? 
-                    aValue - bValue : bValue - aValue;
-            }
-            
-            return result;
+        const column = currentSort.column;
+        const dir = currentSort.direction === 'asc' ? 1 : -1;
+        const def = tableColumns.find(c => c.key === column);
+        // Rate stats (AVG, ERA, ...) only rank players with enough playing time; the rest go last
+        const isRate = def && def.dec > 0;
+
+        const value = p => {
+            if (column === 'name' || column === 'team' || column === 'position') return p[column] || '';
+            if (column === 'points') return p.points || 0;
+            if (def && S.groupOf(p) !== def.group) return null; // a batter has no ERA
+            const season = p.stats_by_season ? p.stats_by_season[currentYear] : null;
+            const stats = (p.is_pitcher ? season?.pitching : season?.batting) || {};
+            if (isRate && !S.qualifies(stats, def.group)) return null;
+            return Number(stats[column]) || 0;
+        };
+
+        players.sort((a, b) => {
+            const av = value(a), bv = value(b);
+            if (av === null || bv === null) return (av === null) - (bv === null); // missing last
+            if (typeof av === 'string') return dir * av.localeCompare(bv);
+            return dir * (av - bv);
         });
-        
-        // Replace the original array content with the sorted content
-        // This ensures the displayed players are updated
-        while (players.length) players.pop();
-        sortedPlayers.forEach(player => players.push(player));
-        
-        console.log('Sorting complete');
         return players;
     }
-    
+
     function sortAndDisplayPlayers() {
-        console.log('Running sortAndDisplayPlayers');
-        sortPlayers(displayedPlayers);
-        renderPlayersTable(displayedPlayers, positionFilter.value);
-        
-        // Add visual indicator for the current sort column
-        const currentSortHeader = document.querySelector(`th[data-sort="${currentSort.column}"]`);
-        if (currentSortHeader) {
-            currentSortHeader.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
-        }
+        // Re-run the filters too, so sorting never brings back filtered-out players
+        filterAndDisplayPlayers();
     }
     
     // Initialize selectedPlayers array
@@ -800,25 +696,8 @@ document.addEventListener('DOMContentLoaded', function() {
         row.setAttribute('data-is-pitcher', player.is_pitcher);
 
         const seasonStats = player.stats_by_season ? player.stats_by_season[currentYear] : null;
-        const battingStats = seasonStats ? seasonStats.batting : {};
-        const pitchingStats = seasonStats ? seasonStats.pitching : {};
-
-        const stats = {
-            hits: battingStats.hits || 0,
-            avg: battingStats.avg || 0,
-            babip: battingStats.babip || 0,
-            runs: battingStats.runs || 0,
-            rbi: battingStats.rbi || 0,
-            steals: battingStats.steals || 0,
-            hr: battingStats.hr || 0,
-            wins: pitchingStats.wins || 0,
-            runs_scored: pitchingStats.era || 0,
-            era: pitchingStats.era || 0,
-            fip: 0,
-            strikeouts: pitchingStats.strikeouts || 0,
-            walks: pitchingStats.walks || 0,
-            saves: pitchingStats.saves || 0
-        };
+        const ownStats = (seasonStats && (player.is_pitcher ? seasonStats.pitching : seasonStats.batting)) || {};
+        const group = S.groupOf(player);
 
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
@@ -843,57 +722,11 @@ document.addEventListener('DOMContentLoaded', function() {
         cells.push(`<td class="team-column">${getTeamNickname(player.team)}</td>`);
         cells.push(`<td class="position-column">${player.position || ''}</td>`);
 
-        if (filterValue === 'pitcher') {
-            cells.push(`<td class="batting-stat" style="display: none">${stats.hits || 0}</td>`);
-            cells.push(`<td class="batting-stat" style="display: none">${(stats.avg || 0).toFixed(3)}</td>`);
-            cells.push(`<td class="batting-stat" style="display: none">${(stats.babip || 0).toFixed(3)}</td>`);
-            cells.push(`<td class="batting-stat" style="display: none">${stats.runs || 0}</td>`);
-            cells.push(`<td class="batting-stat" style="display: none">${stats.rbi || 0}</td>`);
-            cells.push(`<td class="batting-stat" style="display: none">${stats.steals || 0}</td>`);
-            cells.push(`<td class="batting-stat" style="display: none">${stats.hr || 0}</td>`);
-        } else if (filterValue === 'all' && player.is_pitcher) {
-            cells.push(`<td class="batting-stat">-</td>`);
-            cells.push(`<td class="batting-stat">-</td>`);
-            cells.push(`<td class="batting-stat">-</td>`);
-            cells.push(`<td class="batting-stat">-</td>`);
-            cells.push(`<td class="batting-stat">-</td>`);
-            cells.push(`<td class="batting-stat">-</td>`);
-            cells.push(`<td class="batting-stat">-</td>`);
-        } else {
-            cells.push(`<td class="batting-stat">${stats.hits || 0}</td>`);
-            cells.push(`<td class="batting-stat">${(stats.avg || 0).toFixed(3)}</td>`);
-            cells.push(`<td class="batting-stat">${(stats.babip || 0).toFixed(3)}</td>`);
-            cells.push(`<td class="batting-stat">${stats.runs || 0}</td>`);
-            cells.push(`<td class="batting-stat">${stats.rbi || 0}</td>`);
-            cells.push(`<td class="batting-stat">${stats.steals || 0}</td>`);
-            cells.push(`<td class="batting-stat">${stats.hr || 0}</td>`);
-        }
-
-        if (filterValue === 'batter') {
-            cells.push(`<td class="pitching-stat" style="display: none">${stats.wins || 0}</td>`);
-            cells.push(`<td class="pitching-stat" style="display: none">${stats.runs_scored || 0}</td>`);
-            cells.push(`<td class="pitching-stat" style="display: none">${(stats.era || 0).toFixed(2)}</td>`);
-            cells.push(`<td class="pitching-stat" style="display: none">${(stats.fip || 0).toFixed(2)}</td>`);
-            cells.push(`<td class="pitching-stat" style="display: none">${stats.strikeouts || 0}</td>`);
-            cells.push(`<td class="pitching-stat" style="display: none">${stats.walks || 0}</td>`);
-            cells.push(`<td class="pitching-stat" style="display: none">${stats.saves || 0}</td>`);
-        } else if (filterValue === 'all' && !player.is_pitcher) {
-            cells.push(`<td class="pitching-stat">-</td>`);
-            cells.push(`<td class="pitching-stat">-</td>`);
-            cells.push(`<td class="pitching-stat">-</td>`);
-            cells.push(`<td class="pitching-stat">-</td>`);
-            cells.push(`<td class="pitching-stat">-</td>`);
-            cells.push(`<td class="pitching-stat">-</td>`);
-            cells.push(`<td class="pitching-stat">-</td>`);
-        } else {
-            cells.push(`<td class="pitching-stat">${stats.wins || 0}</td>`);
-            cells.push(`<td class="pitching-stat">${stats.runs_scored || 0}</td>`);
-            cells.push(`<td class="pitching-stat">${(stats.era || 0).toFixed(2)}</td>`);
-            cells.push(`<td class="pitching-stat">${(stats.fip || 0).toFixed(2)}</td>`);
-            cells.push(`<td class="pitching-stat">${stats.strikeouts || 0}</td>`);
-            cells.push(`<td class="pitching-stat">${stats.walks || 0}</td>`);
-            cells.push(`<td class="pitching-stat">${stats.saves || 0}</td>`);
-        }
+        tableColumns.forEach(c => {
+            const cls = c.group === 'pit' ? 'pitching-stat' : 'batting-stat';
+            const text = c.group === group ? S.format(ownStats[c.key] || 0, c) : '-';
+            cells.push(`<td class="${cls}">${text}</td>`);
+        });
 
         cells.push(`<td class="points-column">${player.points || 0}</td>`);
         cells.push('<td class="checkbox-column"></td>');
@@ -1004,14 +837,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Get stats for the selected season
         const seasonStats = player.stats_by_season ? player.stats_by_season[currentYear] : null;
-        let stats = seasonStats ? (player.is_pitcher ? seasonStats.pitching : seasonStats.batting) : null;
-
-        if (!stats) {
-            stats = {
-                hits: 0, avg: 0, babip: 0, runs: 0, rbi: 0, steals: 0, hr: 0,
-                wins: 0, runs_scored: 0, era: 0, fip: 0, strikeouts: 0, walks: 0, saves: 0
-            };
-        }
+        const stats = (seasonStats && (player.is_pitcher ? seasonStats.pitching : seasonStats.batting)) || {};
+        const group = S.groupOf(player);
+        const statItems = S.groups[group].map(d => `
+                                <div class="stat-item">
+                                    <span class="stat-label">${d.name}</span>
+                                    <span class="stat-value">${S.format(stats[d.key] || 0, d)}</span>
+                                </div>`).join('');
 
         // Create player card HTML
         const cardHTML = `
@@ -1025,76 +857,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
                 
                 <div class="player-card-stats">
-                    ${player.is_pitcher ? `
-                        <div class="stats-section">
-                            <h3>Pitching Stats (${seasonLabel(currentYear)})</h3>
-                            <div class="stats-grid">
-                                <div class="stat-item">
-                                    <span class="stat-label">Wins</span>
-                                    <span class="stat-value">${stats.wins || 0}</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Runs</span>
-                                    <span class="stat-value">${stats.runs_scored || 0}</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">ERA</span>
-                                    <span class="stat-value">${(stats.era || 0).toFixed(2)}</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">FIP</span>
-                                    <span class="stat-value">${(stats.fip || 0).toFixed(2)}</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Strikeouts</span>
-                                    <span class="stat-value">${stats.strikeouts || 0}</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Walks</span>
-                                    <span class="stat-value">${stats.walks || 0}</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Saves</span>
-                                    <span class="stat-value">${stats.saves || 0}</span>
-                                </div>
-                            </div>
+                    <div class="stats-section">
+                        <h3>${player.is_pitcher ? 'Pitching' : 'Batting'} Stats (${seasonLabel(currentYear)})</h3>
+                        <div class="stats-grid">${statItems}
                         </div>
-                    ` : `
-                        <div class="stats-section">
-                            <h3>Batting Stats (${seasonLabel(currentYear)})</h3>
-                            <div class="stats-grid">
-                                <div class="stat-item">
-                                    <span class="stat-label">Hits</span>
-                                    <span class="stat-value">${stats.hits || 0}</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Average</span>
-                                    <span class="stat-value">${(stats.avg || 0).toFixed(3)}</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">BABIP</span>
-                                    <span class="stat-value">${(stats.babip || 0).toFixed(3)}</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Runs</span>
-                                    <span class="stat-value">${stats.runs || 0}</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">RBI</span>
-                                    <span class="stat-value">${stats.rbi || 0}</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Steals</span>
-                                    <span class="stat-value">${stats.steals || 0}</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Home Runs</span>
-                                    <span class="stat-value">${stats.hr || 0}</span>
-                                </div>
-                            </div>
-                        </div>
-                    `}
-                    
+                    </div>
+
                     <div class="stats-section">
                         <h3>Fantasy Points</h3>
                         <div class="stats-grid">

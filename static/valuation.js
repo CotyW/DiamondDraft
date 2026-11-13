@@ -17,20 +17,36 @@
 
     const num = v => (v === null || v === undefined || v === '' || isNaN(v) ? 0 : Number(v));
 
+    // Rate stats are scored by how much a player moves a team's rate: (player rate - pool rate)
+    // times his playing time. "needs" lists stats a category can't work without; if the data has
+    // none of them (e.g. older Supabase rows), the category is dropped rather than scored as 0.
+    // pointKey links a category to its Scoring Weights input (static/stats.js) for points leagues.
     const BAT_CATS = {
-        runs:   { label: 'Runs',  get: s => s.runs,   pointKey: 'runs' },
-        hr:     { label: 'HR',    get: s => s.hr,     pointKey: 'hr' },
-        rbi:    { label: 'RBI',   get: s => s.rbi,    pointKey: 'rbi' },
-        steals: { label: 'SB',    get: s => s.steals, pointKey: 'steals' },
-        hits:   { label: 'Hits',  get: s => s.hits,   pointKey: 'hits' },
-        avg:    { label: 'AVG',   rate: true, num: s => s.hits, den: s => s.ab }
+        runs:    { label: 'Runs',  get: s => s.runs,    pointKey: 'runs' },
+        hr:      { label: 'HR',    get: s => s.hr,      pointKey: 'hr' },
+        rbi:     { label: 'RBI',   get: s => s.rbi,     pointKey: 'rbi' },
+        steals:  { label: 'SB',    get: s => s.steals,  pointKey: 'steals' },
+        hits:    { label: 'Hits',  get: s => s.hits,    pointKey: 'hits' },
+        avg:     { label: 'AVG',   rate: true, num: s => s.hits, den: s => s.ab },
+        obp:     { label: 'OBP',   rate: true, needs: ['pa'], num: s => s.hits + s.bb + s.hbp, den: s => s.ab + s.bb + s.hbp + s.sf },
+        slg:     { label: 'SLG',   rate: true, needs: ['tb'], num: s => s.tb, den: s => s.ab },
+        ops:     { label: 'OPS',   rate: true, needs: ['pa'], num: s => s.ops * s.pa, den: s => s.pa },
+        tb:      { label: 'TB',    get: s => s.tb,      needs: ['tb'], pointKey: 'tb' },
+        bb:      { label: 'BB',    get: s => s.bb,      needs: ['pa'], pointKey: 'bb' },
+        doubles: { label: '2B',    get: s => s.doubles, needs: ['pa'], pointKey: 'doubles' },
+        triples: { label: '3B',    get: s => s.triples, needs: ['pa'], pointKey: 'triples' },
+        so:      { label: 'K',     get: s => s.so,      needs: ['pa'], dir: -1, pointKey: 'so' }
     };
     const PIT_CATS = {
         wins:        { label: 'Wins',  get: s => s.wins,        pointKey: 'wins' },
         saves:       { label: 'Saves', get: s => s.saves,       pointKey: 'saves' },
         strikeouts:  { label: 'K',     get: s => s.strikeouts,  pointKey: 'strikeouts' },
         era:         { label: 'ERA',   rate: true, dir: -1, num: s => s.era * s.ip / 9, den: s => s.ip / 9 },
-        whip:        { label: 'WHIP',  rate: true, dir: -1, num: s => s.hits_allowed + s.walks, den: s => s.ip },
+        whip:        { label: 'WHIP',  rate: true, dir: -1, needs: ['hits_allowed'], num: s => s.hits_allowed + s.walks, den: s => s.ip },
+        holds:       { label: 'Holds', get: s => s.holds,       needs: ['holds'], pointKey: 'holds' },
+        svhd:        { label: 'SV+HLD', get: s => s.saves + s.holds, needs: ['holds'] },
+        k9:          { label: 'K/9',   rate: true, num: s => s.strikeouts * 9, den: s => s.ip },
+        losses:      { label: 'Losses', get: s => s.losses,     needs: ['losses'], dir: -1, pointKey: 'losses' },
         walks:       { label: 'BB',    get: s => s.walks,       dir: -1, pointKey: 'walks' },
         runs_scored: { label: 'Runs allowed', get: s => s.runs_scored, dir: -1, pointKey: 'runs_scored' }
     };
@@ -45,7 +61,7 @@
             pit: ['wins', 'saves', 'strikeouts', 'era', 'whip']
         },
         catWeights: {},      // h2h: category key -> weight (default 1)
-        pointWeights: {},    // points: scoring input id -> weight (used for the driver column)
+        pointWeights: {},    // points: { bat: {stat: weight}, pit: {...} } from Scoring Weights (driver column)
         tiers: 10,
         minAB: 100,
         minIP: 20
@@ -80,11 +96,18 @@
         return DISPLAY[first] || first;
     }
 
+    // Every stat a category formula reads; missing ones (older data) count as 0, not NaN
+    const STAT_KEYS = {
+        bat: ['pa', 'ab', 'hits', 'doubles', 'triples', 'hr', 'runs', 'rbi', 'steals', 'bb', 'so', 'hbp', 'sf', 'tb', 'ops', 'avg'],
+        pit: ['ip', 'wins', 'losses', 'saves', 'holds', 'strikeouts', 'walks', 'hits_allowed', 'runs_scored', 'era']
+    };
+
     function readStats(player, year, isPitcher) {
         const season = player.stats_by_season && player.stats_by_season[year];
         const raw = season && (isPitcher ? season.pitching : season.batting);
         if (!raw) return null;
         const s = {};
+        STAT_KEYS[isPitcher ? 'pit' : 'bat'].forEach(k => { s[k] = 0; });
         Object.keys(raw).forEach(k => { s[k] = num(raw[k]); });
         if (isPitcher) {
             s.ip = num(raw.ip ?? raw.innings_pitched);
@@ -131,11 +154,9 @@
 
     function activeCategories(group, rows, settings) {
         const defs = CATS[group];
-        let keys = settings.selected[group].filter(k => defs[k]);
+        const keys = settings.selected[group].filter(k => defs[k]);
         if (!rows.length) return keys;
-        // WHIP needs hits allowed, which Supabase data may not have
-        if (group === 'pit' && !rows.some(r => r.s.hits_allowed > 0)) keys = keys.filter(k => k !== 'whip');
-        return keys;
+        return keys.filter(k => (defs[k].needs || []).every(stat => rows.some(r => r.s[stat] > 0)));
     }
 
     // Per-row contribution to a category, measured against the pool's rate for rate stats
@@ -246,7 +267,7 @@
 
             let contrib;
             if (isPoints) {
-                const w = num(settings.pointWeights[def.pointKey]);
+                const w = num((settings.pointWeights[group] || {})[def.pointKey]);
                 contrib = groupPool.map(r => w * def.get(r.s));
                 if (!w) contrib = null;
             } else if (selected.has(key)) {

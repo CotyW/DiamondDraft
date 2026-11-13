@@ -5,6 +5,9 @@ The year after the last season holds the projection. data/last_updated.json reco
 seasons are in the file and which year is the projection; the web page builds its season
 tabs from that, so DEFAULT_SEASONS below is the only place the years are written down.
 
+Batters' lines hold batting stats and pitchers' lines pitching stats (see projections.py for
+the keys). The projection uses the Marcel method, also in projections.py.
+
 Existing players in data/players.json are kept and updated.
 
 Usage: python fetch_data.py [--seasons YEAR ...] [--projection-year YEAR]
@@ -16,6 +19,8 @@ import time
 from datetime import datetime
 
 import requests
+
+import projections as proj
 
 BASE_URL = "https://statsapi.mlb.com/api"
 DATA_DIR = 'data'
@@ -33,21 +38,6 @@ MAX_DROP = 0.05
 FETCH_ATTEMPTS = 3
 SP_START_SHARE = 0.5    # share of appearances that are starts for a pitcher to count as SP
 FIELDING_POSITIONS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'OF']
-FIP_CONSTANT = 3.10
-# Newest season first; used to blend past seasons into the projection.
-PROJECTION_WEIGHTS = [0.5, 0.3, 0.2]
-
-BATTING_KEYS = ['avg', 'runs', 'rbi', 'steals', 'hr', 'hits', 'babip', 'ab']
-PITCHING_KEYS = ['wins', 'era', 'strikeouts', 'walks', 'saves', 'runs_scored', 'fip', 'ip', 'hits_allowed']
-# ab/ip/hits_allowed give volume for weighting AVG, ERA and WHIP in roto valuation
-RATE_KEYS = {'avg': 3, 'babip': 3, 'era': 2, 'fip': 2, 'ip': 1}
-
-
-def empty_stats():
-    stats = {k: 0 for k in BATTING_KEYS + PITCHING_KEYS}
-    for k in RATE_KEYS:
-        stats[k] = 0.0
-    return stats
 
 
 def innings_to_float(ip):
@@ -65,67 +55,35 @@ def is_combined_row(split):
     return (split.get('numTeams') or 1) > 1
 
 
-def batting_from_splits(splits):
-    """Combine a season's per-team splits (several when a player was traded)."""
-    t = {k: 0 for k in ('ab', 'h', 'hr', 'so', 'sf', 'runs', 'rbi', 'sb')}
-    for s in splits:
-        st = s['stat']
-        t['ab'] += int(st.get('atBats', 0) or 0)
-        t['h'] += int(st.get('hits', 0) or 0)
-        t['hr'] += int(st.get('homeRuns', 0) or 0)
-        t['so'] += int(st.get('strikeOuts', 0) or 0)
-        t['sf'] += int(st.get('sacFlies', 0) or 0)
-        t['runs'] += int(st.get('runs', 0) or 0)
-        t['rbi'] += int(st.get('rbi', 0) or 0)
-        t['sb'] += int(st.get('stolenBases', 0) or 0)
-    denom = t['ab'] - t['so'] - t['hr'] + t['sf']
-    return {
-        'avg': round(t['h'] / t['ab'], 3) if t['ab'] else 0.0,
-        'runs': t['runs'], 'rbi': t['rbi'], 'steals': t['sb'], 'hr': t['hr'], 'hits': t['h'],
-        'ab': t['ab'],
-        'babip': round((t['h'] - t['hr']) / denom, 3) if denom > 0 else 0.0,
-    }
+# API field -> our key, for adding up a season's per-team rows
+BAT_FIELDS = {'plateAppearances': 'pa', 'atBats': 'ab', 'hits': 'hits', 'doubles': 'doubles',
+              'triples': 'triples', 'homeRuns': 'hr', 'runs': 'runs', 'rbi': 'rbi',
+              'stolenBases': 'steals', 'caughtStealing': 'cs', 'baseOnBalls': 'bb',
+              'strikeOuts': 'so', 'hitByPitch': 'hbp', 'sacFlies': 'sf'}
+PIT_FIELDS = {'gamesPitched': 'g', 'gamesStarted': 'gs', 'wins': 'wins', 'losses': 'losses',
+              'saves': 'saves', 'holds': 'holds', 'strikeOuts': 'strikeouts', 'baseOnBalls': 'walks',
+              'hitBatsmen': 'hbp', 'hits': 'hits_allowed', 'homeRuns': 'hr_allowed',
+              'runs': 'runs_scored', 'earnedRuns': 'er'}
 
 
-def pitching_from_splits(splits):
-    t = {k: 0 for k in ('w', 'er', 'k', 'bb', 'sv', 'r', 'hr', 'h')}
+def season_counts(splits, is_pitcher):
+    """Add up a season's per-team rows (several when a player was traded) into counting stats."""
+    fields = PIT_FIELDS if is_pitcher else BAT_FIELDS
+    totals = {key: 0 for key in fields.values()}
     ip = 0.0
     for s in splits:
         st = s['stat']
-        t['w'] += int(st.get('wins', 0) or 0)
-        t['er'] += int(st.get('earnedRuns', 0) or 0)
-        t['k'] += int(st.get('strikeOuts', 0) or 0)
-        t['bb'] += int(st.get('baseOnBalls', 0) or 0)
-        t['sv'] += int(st.get('saves', 0) or 0)
-        t['r'] += int(st.get('runs', 0) or 0)
-        t['hr'] += int(st.get('homeRuns', 0) or 0)
-        t['h'] += int(st.get('hits', 0) or 0)
-        ip += innings_to_float(st.get('inningsPitched'))
-    return {
-        'ip': round(ip, 1), 'hits_allowed': t['h'],
-        'wins': t['w'],
-        'era': round(t['er'] * 9 / ip, 2) if ip else 0.0,
-        'strikeouts': t['k'], 'walks': t['bb'], 'saves': t['sv'], 'runs_scored': t['r'],
-        'fip': round((13 * t['hr'] + 3 * t['bb'] - 2 * t['k']) / ip + FIP_CONSTANT, 2) if ip else 0.0,
-    }
+        for field, key in fields.items():
+            totals[key] += int(st.get(field, 0) or 0)
+        if is_pitcher:
+            ip += innings_to_float(st.get('inningsPitched'))
+    if is_pitcher:
+        totals['ip'] = ip
+    return totals
 
 
-def project_next_season(history, is_pitcher):
-    """Weighted blend of recent seasons (newest first). Seasons with no activity are skipped."""
-    keys = PITCHING_KEYS if is_pitcher else BATTING_KEYS
-    active = [h for h in history if any(h.get(k) for k in keys)]
-    weights = PROJECTION_WEIGHTS[:len(active)]
-    total = sum(weights)
-    proj = empty_stats()
-    if not active:
-        return proj
-    for k in keys:
-        value = sum(w * h.get(k, 0) for w, h in zip(weights, active)) / total
-        proj[k] = round(value, RATE_KEYS[k]) if k in RATE_KEYS else int(round(value))
-    return proj
-
-
-def build_player_stats(person, is_pitcher, seasons, projection_year):
+def season_lines(person, is_pitcher, seasons):
+    """{season: stat line} for each requested season; zeros for seasons the player missed."""
     group = 'pitching' if is_pitcher else 'hitting'
     by_season = {}
     for stat_group in person.get('stats', []):
@@ -134,17 +92,55 @@ def build_player_stats(person, is_pitcher, seasons, projection_year):
         for split in stat_group.get('splits', []):
             if split.get('season') and 'stat' in split and not is_combined_row(split):
                 by_season.setdefault(int(split['season']), []).append(split)
-
-    builder = pitching_from_splits if is_pitcher else batting_from_splits
-    result, history = {}, []
+    lines = {}
     for season in sorted(seasons):
-        stats = empty_stats()
-        if season in by_season:
-            stats.update(builder(by_season[season]))
-        result[str(season)] = stats
-        history.append(stats)
-    result[str(projection_year)] = project_next_season(history[::-1], is_pitcher)
-    return result
+        if season not in by_season:
+            lines[str(season)] = proj.empty_line(is_pitcher)
+            continue
+        counts = season_counts(by_season[season], is_pitcher)
+        lines[str(season)] = proj.pitching_line(counts) if is_pitcher else proj.batting_line(counts)
+    return lines
+
+
+def age_in(birth_date, year):
+    """Age during a season (as of July 1, the usual baseball convention), or None."""
+    try:
+        y, m, d = (int(x) for x in birth_date.split('-'))
+    except (AttributeError, ValueError):
+        return None
+    return year - y - (1 if (m, d) > (7, 1) else 0)
+
+
+def add_projections(players, seasons, projection_year):
+    """Fill in each player's projection year, using league totals from all fetched players.
+
+    Also sets every season's FIP with that season's own FIP constant.
+    """
+    seasons = sorted(seasons)
+    recent = [str(s) for s in seasons[::-1]]  # newest first
+    league = {}
+    for season in map(str, seasons):
+        bat = [p['stats'][season] for p in players if not p['is_pitcher']]
+        pit = [p['stats'][season] for p in players if p['is_pitcher']]
+        league[season] = {
+            'bat': proj.league_totals(bat, proj.BAT_COUNTS),
+            'pit': proj.league_totals(pit, proj.PIT_COUNTS),
+        }
+        league[season]['fip'] = proj.fip_constant(league[season]['pit'])
+
+    for p in players:
+        age = age_in(p.get('birth_date'), projection_year)
+        history = [p['stats'][s] for s in recent]
+        if p['is_pitcher']:
+            for s in recent:
+                p['stats'][s] = proj.pitching_line(p['stats'][s], league[s]['fip'])
+            history = [p['stats'][s] for s in recent]
+            p['stats'][str(projection_year)] = proj.project_pitcher(
+                history, [league[s]['pit'] for s in recent], age, league[recent[0]]['fip'])
+        else:
+            p['stats'][str(projection_year)] = proj.project_batter(
+                history, [league[s]['bat'] for s in recent], age)
+    return {s: {'fip_constant': league[s]['fip']} for s in league}
 
 
 def eligible_positions(person, season, roster_position, min_games=ELIGIBILITY_GAMES):
@@ -265,7 +261,7 @@ def check_against_existing(players, existing, seasons):
     return None
 
 
-def build_players(info, person, seasons, projection_year):
+def build_players(info, person, seasons):
     """The data entries for one roster player: one, or two for a two-way player."""
     team = latest_team(person, max(seasons)) or info['team_name']
     two_way = info['position'] in TWO_WAY_POSITIONS
@@ -287,11 +283,12 @@ def build_players(info, person, seasons, projection_year):
             'position': '/'.join(positions),
             'primary_position': positions[0],
             'is_pitcher': is_pitcher,
+            'birth_date': person.get('birthDate'),
         }
         if two_way:
             player['two_way'] = True
             player['mlb_id'] = info['id']
-        player['stats'] = build_player_stats(person, is_pitcher, seasons, projection_year)
+        player['stats'] = season_lines(person, is_pitcher, seasons)
         entries.append(player)
     return entries
 
@@ -331,7 +328,7 @@ def fetch_players_data(seasons=None, projection_year=None, force=False):
                 person = fetch_person(info['id'], hydrate)
                 if person is None:
                     continue
-                players.extend(build_players(info, person, seasons, projection_year))
+                players.extend(build_players(info, person, seasons))
                 if idx % 100 == 0:
                     print(f"Processed {idx}/{len(roster)} players...")
                 time.sleep(0.05)
@@ -341,6 +338,7 @@ def fetch_players_data(seasons=None, projection_year=None, force=False):
         if not players:
             print("No players fetched; leaving existing data untouched")
             return False
+        league = add_projections(players, seasons, projection_year)
         problem = check_against_existing(players, list(existing.values()), seasons)
         if problem and not force:
             print(f"Not saving: {problem}. Existing data left untouched; use --force to save anyway.")
@@ -361,6 +359,8 @@ def fetch_players_data(seasons=None, projection_year=None, force=False):
                 'pitchers': len(pitchers),
                 'seasons': sorted(seasons),
                 'projection_year': projection_year,
+                'projection_method': 'marcel',
+                'league': league,
             }, f)
         print(f"Saved {len(players)} players ({len(batters)} batters, {len(pitchers)} pitchers)")
         return True

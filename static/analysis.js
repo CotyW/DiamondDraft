@@ -5,7 +5,6 @@
 (function () {
     const V = window.DDValuation;
     const STORAGE_KEY = 'dd-analysis-settings';
-    const POINT_IDS = ['hits', 'runs', 'rbi', 'steals', 'hr', 'wins', 'runs_scored', 'strikeouts', 'walks', 'saves'];
     const SLOT_LABELS = { C: 'C', '1B': '1B', '2B': '2B', '3B': '3B', SS: 'SS', OF: 'OF', UTIL: 'UTIL', SP: 'SP', RP: 'RP', P: 'P (any)' };
 
     const settingsEl = document.getElementById('analysis-settings');
@@ -112,13 +111,9 @@
         if (e.target.id === 'board-more') { boardLimit += 60; render(); }
     });
 
+    // Scoring Weights from the page, as { bat: {stat: weight}, pit: {...} }
     function pointWeights() {
-        const w = {};
-        POINT_IDS.forEach(id => {
-            const el = document.getElementById(id);
-            w[id] = el ? parseFloat(el.value) || 0 : 0;
-        });
-        return w;
+        return window.DDReadWeights ? window.DDReadWeights() : { bat: {}, pit: {} };
     }
 
     function recompute() {
