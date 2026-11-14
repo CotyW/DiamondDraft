@@ -365,6 +365,70 @@ test('analyze does not change DEFAULT_SETTINGS', () => {
     assert.equal(JSON.stringify(V.DEFAULT_SETTINGS), before);
 });
 
+// ---- Auction values ----
+
+const AUCTION = { ...SMALL, draftType: 'auction', budget: 260 };
+const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-6, `${msg}: ${a} vs ${b}`);
+const total = rows => rows.reduce((t, r) => t + r.dollars, 0);
+
+test('auction: dollars add up to every team\'s budget', () => {
+    const r = V.analyze(league(), YEAR, AUCTION);
+    close(total(r.board), 2 * 260, 'league total');
+    close(r.auction.total, 520, 'reported total');
+});
+
+test('auction: every drafted player is worth at least $1, and more value means more dollars', () => {
+    const r = V.analyze(league(), YEAR, AUCTION);
+    assert.ok(r.board.every(x => x.dollars >= 1 - 1e-9));
+    ['bat', 'pit'].forEach(g => {
+        const rows = r.board.filter(x => x.isPitcher === (g === 'pit')).sort((a, b) => b.vorp - a.vorp);
+        for (let i = 1; i < rows.length; i++) assert.ok(rows[i - 1].dollars >= rows[i].dollars - 1e-9);
+    });
+});
+
+test('auction: a drafted player at or below replacement level is a $1 player', () => {
+    const rows = [10, 5, 0, -2].map(vorp => ({ vorp, isPitcher: false }))
+        .concat([4, 0].map(vorp => ({ vorp, isPitcher: true })));
+    const a = V.auctionValues(rows, { teams: 1, budget: 20, hitterShare: null });
+    assert.deepEqual(rows.filter(x => x.vorp <= 0).map(x => x.dollars), [1, 1, 1]);
+    // hitters get 15/19 of the $20; after four $1s the rest goes 10:5 to the two above replacement
+    const extra = 20 * 15 / 19 - 4;
+    close(rows[0].dollars, 1 + extra * 10 / 15, 'best hitter');
+    close(rows[1].dollars, 1 + extra * 5 / 15, 'second hitter');
+    close(a.spent, 20, 'total');
+});
+
+test('auction: by default money is split by value; a set hitter share is honored', () => {
+    const auto = V.analyze(league(), YEAR, AUCTION);
+    const pos = rows => rows.reduce((t, x) => t + Math.max(0, x.vorp), 0);
+    const bat = auto.board.filter(x => !x.isPitcher), pit = auto.board.filter(x => x.isPitcher);
+    close(auto.auction.hitterShare, pos(bat) / (pos(bat) + pos(pit)), 'auto share');
+
+    const set = V.analyze(league(), YEAR, { ...AUCTION, hitterShare: 67 });
+    close(total(set.board.filter(x => !x.isPitcher)), 0.67 * 520, 'hitter money');
+    close(total(set.board.filter(x => x.isPitcher)), 0.33 * 520, 'pitcher money');
+});
+
+test('auction: an extreme hitter share still leaves every player $1 and the total intact', () => {
+    const r = V.analyze(league(), YEAR, { ...AUCTION, hitterShare: 0 });
+    assert.ok(r.board.every(x => x.dollars >= 1 - 1e-9));
+    close(total(r.board), 520, 'league total');
+});
+
+test('auction: the board is ranked by dollars; snake drafts have no dollars', () => {
+    const r = V.analyze(league(), YEAR, { ...AUCTION, hitterShare: 80 });
+    for (let i = 1; i < r.board.length; i++) assert.ok(r.board[i - 1].dollars >= r.board[i].dollars);
+    const snake = V.analyze(league(), YEAR, SMALL);
+    assert.equal(snake.auction, null);
+    assert.ok(snake.board.every(x => x.dollars === undefined));
+});
+
+test('auction: points leagues get dollars too', () => {
+    const players = league().map(p => ({ ...p, points: p.is_pitcher ? 300 : 400 + (p.id % 7) * 20 }));
+    const r = V.analyze(players, YEAR, { ...AUCTION, format: 'points' });
+    close(total(r.board), 520, 'league total');
+});
+
 // ---- The real data file ----
 
 const dataPath = path.join(__dirname, '..', 'data', 'players.json');
@@ -385,6 +449,9 @@ test('real data: every season and format runs cleanly', { skip: !fs.existsSync(d
             assert.equal(r.board.length, starters, `${year} ${format}`);
             assert.ok(r.rows.every(x => Number.isFinite(x.raw) && Number.isFinite(x.vorp)), `${year} ${format}`);
             assert.equal(new Set(r.board.map(x => String(x.id))).size, r.board.length, `duplicate ids ${year} ${format}`);
+            const a = V.analyze(players, year, { format, draftType: 'auction' });
+            const spent = a.board.reduce((t, x) => t + x.dollars, 0);
+            assert.ok(Math.abs(spent - 260 * V.DEFAULT_SETTINGS.teams) < 1e-6, `auction total ${year} ${format}`);
         }
     }
 });
