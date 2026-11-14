@@ -858,7 +858,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 <div class="player-card-stats">
                     <div class="stats-section">
-                        <h3>${player.is_pitcher ? 'Pitching' : 'Batting'} Stats (${seasonLabel(currentYear)})</h3>
+                        <h3>${player.is_pitcher ? 'Pitching' : 'Batting'} Stats (${seasonLabel(currentYear)}${isProjected(currentYear) ? (player.projection_source === 'steamer' ? ', Steamer' : ', Marcel') : ''})</h3>
                         <div class="stats-grid">${statItems}
                         </div>
                     </div>
