@@ -14,6 +14,7 @@
     let activeTab = 'categories';
     let boardPos = 'all';
     let boardLimit = 60;
+    const catView = { bat: 'impact', pit: 'impact' }; // per group: category table or overlap matrix
     let settings = loadSettings();
     let result = null;
     let timer = null;
@@ -130,6 +131,12 @@
     });
     outputEl.addEventListener('click', e => {
         if (e.target.id === 'board-more') { boardLimit += 60; render(); }
+        const toggle = e.target.closest('[data-catview]');
+        if (toggle) {
+            const [g, view] = toggle.dataset.catview.split(':');
+            catView[g] = view;
+            render();
+        }
     });
 
     // Scoring Weights from the page, as { bat: {stat: weight}, pit: {...} }
@@ -162,7 +169,7 @@
         else outputEl.innerHTML = renderPositions();
     }
 
-    function categoryTable(title, cats) {
+    function categoryTable(cats) {
         if (!cats.length) return '';
         const rows = cats.map(c => `
             <tr class="${c.inLeague ? '' : 'dim'}">
@@ -175,8 +182,7 @@
                 <td>${c.driver === null ? '—' : fmt(c.driver, 2)}</td>
                 <td><span class="badge badge-${c.label2.toLowerCase()}">${c.label2}</span></td>
             </tr>`).join('');
-        return `<h3>${title}</h3>
-            <div class="analysis-scroll"><table class="analysis-table">
+        return `<div class="analysis-scroll"><table class="analysis-table">
             <thead><tr>
                 <th>Category</th><th title="Average among drafted players">Pool avg</th><th>Std dev</th>
                 <th title="Std dev / average. High = production concentrated in a few players">Spread (CV)</th>
@@ -187,15 +193,15 @@
             <tbody>${rows}</tbody></table></div>`;
     }
 
-    function correlationTable(title, corr) {
-        if (!corr || corr.keys.length < 2) return '';
+    function correlationTable(corr) {
         const head = corr.keys.map(k => `<th>${esc(k)}</th>`).join('');
         const body = corr.keys.map((k, i) => `<tr><th>${esc(k)}</th>${corr.matrix[i].map((v, j) => {
             const a = i === j ? 0 : Math.min(1, Math.abs(v));
             const bg = i === j ? '#f3f4f6' : `rgba(${v > 0 ? '27,87,196' : '200,60,60'},${(a * 0.45).toFixed(2)})`;
             return `<td style="background:${bg}">${i === j ? '' : fmt(v, 2)}</td>`;
         }).join('')}</tr>`).join('');
-        return `<h4>${title}</h4><div class="analysis-scroll"><table class="analysis-table corr"><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+        return `<p class="analysis-note">How closely two categories move together across drafted players. Blue = drafting for one tends to get you the other; red = they pull against each other.</p>
+            <div class="analysis-scroll"><table class="analysis-table corr"><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
     }
 
     function takeaways() {
@@ -222,10 +228,21 @@
         const fmtName = { roto: 'Roto', h2h: 'Head-to-head categories', points: 'Points' }[s.format];
         return `<p class="analysis-note">${fmtName} · ${s.teams} teams · ${result.meta.drafted} drafted players analysed out of ${result.meta.candidates} with enough playing time. "Pool" means players who would be drafted at these settings.</p>
             ${takeaways()}
-            ${categoryTable('Batting', result.categories.bat)}
-            ${categoryTable('Pitching', result.categories.pit)}
-            ${s.format === 'points' ? '' : correlationTable('Batting category overlap', result.correlations.bat)}
-            ${s.format === 'points' ? '' : correlationTable('Pitching category overlap', result.correlations.pit)}`;
+            ${categorySection('bat', 'Batting')}
+            ${categorySection('pit', 'Pitching')}`;
+    }
+
+    // One section per group: the h3 carries a toggle between the category table and the overlap matrix
+    function categorySection(g, title) {
+        const cats = result.categories[g];
+        if (!cats.length) return '';
+        const corr = result.correlations[g];
+        const hasOverlap = result.settings.format !== 'points' && corr && corr.keys.length > 1;
+        const view = hasOverlap ? catView[g] : 'impact';
+        const btn = (v, label) => `<button type="button" class="view-toggle-btn${view === v ? ' active' : ''}" data-catview="${g}:${v}" aria-pressed="${view === v}">${label}</button>`;
+        const toggle = hasOverlap ? `<div class="view-toggle" role="group" aria-label="${title} view">${btn('impact', 'Categories')}${btn('overlap', 'Overlap')}</div>` : '';
+        return `<div class="cat-section-head"><h3>${title}</h3>${toggle}</div>
+            ${view === 'overlap' ? correlationTable(corr) : categoryTable(cats)}`;
     }
 
     function renderBoard() {
