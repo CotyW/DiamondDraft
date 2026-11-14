@@ -80,3 +80,5 @@ yarn-error.log*
 # Uncomment if needed
 # dist/
 # build/
+# FanGraphs Steamer exports: their terms forbid republishing, so never commit them
+projections/*.csv

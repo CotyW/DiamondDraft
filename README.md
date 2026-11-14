@@ -16,7 +16,9 @@ DiamondDraft is a web application for calculating and comparing baseball player 
 ## How It Works
 DiamondDraft is a static web application (GitHub Pages or a local Flask server). Player data lives in `data/*.json`, refreshed daily from the MLB Stats API by a GitHub Action. All calculations run client-side in your browser.
 
-The projection uses the Marcel method, a deliberately simple and widely used baseline (`projections.py`):
+The projection uses Steamer for every player covered by the Steamer CSVs in `projections/` (see [Using Steamer Projections](#using-steamer-projections)), and the Marcel method for everyone else. The player card shows which one a player's projection comes from.
+
+Marcel is a deliberately simple and widely used baseline (`projections.py`):
 - The last three seasons are weighted 5/4/3 for batters and 3/2/1 for pitchers, newest heaviest.
 - Every player is regressed toward league average by adding 1,200 plate appearances (batters) or 134 innings (pitchers) of league-average stats, so a player with little history moves the most.
 - Rates rise slightly for players under 29 and fall for those over it.
@@ -43,11 +45,21 @@ A full run makes about 1,800 API calls and takes roughly 15 minutes. It writes `
 
 Failed requests are retried. If a run still comes back with more than 5% fewer players than `data/players.json`, or 5% fewer players with stats in any season both cover, it leaves the existing files alone and exits with an error, so the daily Action doesn't publish a half-failed fetch. Add `--force` to save anyway.
 
+### Using Steamer Projections
+1. On FanGraphs, open the Steamer projections for batters, click "Export Data", and save the file as `projections/steamer-batters.csv`. Do the same for pitchers as `projections/steamer-pitchers.csv`.
+2. Run `python fetch_data.py --projections-only`. This rebuilds the projections from the stats already in `data/`, with no MLB API calls, and prints how many players it matched.
+
+The CSVs are in `.gitignore` and must stay out of the repo: FanGraphs' terms don't allow republishing their data, and Steamer exports are for FanGraphs members. Keep in mind that the rebuilt `data/` files also contain the Steamer numbers, so committing them would publish Steamer on the public site.
+
+Players are matched by MLB id (the export's `MLBAMID` column), or by name when a file has none. Players Steamer covers that aren't in our data, mostly minor leaguers, are skipped. Players Steamer doesn't cover keep their Marcel projection. The daily Action doesn't have the CSVs, so its runs use Marcel only. Replace your local CSVs whenever you want newer projections. Make sure they're for the projection year (the year after the last season in `DEFAULT_SEASONS`).
+
+To go back to Marcel only, delete the two CSVs and run `--projections-only` again.
+
 ### Rolling Over to a New Season
 The season years are set in one place: `DEFAULT_SEASONS` in `fetch_data.py`. Add the new season there (the projection is always the year after the last one) and run the fetch. The page builds its season tabs from `data/last_updated.json`, so nothing else needs editing.
 
 ### Running Tests
-Tests live in `tests/`: the draft valuation engine and stat definitions (JavaScript) and the projections (Python). Run `npm test` for both; it needs Node 22+ and Python 3, with no packages to install. They also run on GitHub for every push.
+Tests live in `tests/`: the draft valuation engine and stat definitions (JavaScript) and the projections and Steamer import (Python). Run `npm test` for both; it needs Node 22+ and Python 3, with no packages to install. They also run on GitHub for every push.
 
 ### Publishing to GitHub Pages
 The root `index.html` is generated from `templates/index.html`. After editing the template, run `python build_pages.py` and commit the result.
@@ -69,6 +81,7 @@ For long-term storage in Supabase:
 - `static/supabase-client.js` - Loads data from static JSON or Supabase
 - `fetch_data.py` - Fetches and processes MLB data
 - `projections.py` - Season stat lines and the Marcel projection
+- `steamer.py` - Reads Steamer CSV exports from `projections/` and applies them
 - `upload_static_to_supabase.py`, `supabase_schema.sql` - Supabase setup
 - `tests/` - Tests for the valuation engine, stat definitions and projections (`npm test`)
 - `.github/workflows/update-data.yml` - Daily data update

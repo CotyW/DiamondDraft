@@ -6,11 +6,13 @@ seasons are in the file and which year is the projection; the web page builds it
 tabs from that, so DEFAULT_SEASONS below is the only place the years are written down.
 
 Batters' lines hold batting stats and pitchers' lines pitching stats (see projections.py for
-the keys). The projection uses the Marcel method, also in projections.py.
+the keys). The projection uses Steamer where projections/steamer-*.csv cover a player (steamer.py)
+and the Marcel method (projections.py) for everyone else.
 
 Existing players in data/players.json are kept and updated.
 
-Usage: python fetch_data.py [--seasons YEAR ...] [--projection-year YEAR]
+Usage: python fetch_data.py [--seasons YEAR ...] [--projection-year YEAR] [--force]
+       python fetch_data.py --projections-only   # after adding Steamer CSVs (see steamer.py)
 """
 import argparse
 import json
@@ -21,6 +23,7 @@ from datetime import datetime
 import requests
 
 import projections as proj
+import steamer
 
 BASE_URL = "https://statsapi.mlb.com/api"
 DATA_DIR = 'data'
@@ -129,6 +132,7 @@ def add_projections(players, seasons, projection_year):
         league[season]['fip'] = proj.fip_constant(league[season]['pit'])
 
     for p in players:
+        p.pop('projection_source', None)  # set again below if Steamer covers the player
         age = age_in(p.get('birth_date'), projection_year)
         history = [p['stats'][s] for s in recent]
         if p['is_pitcher']:
@@ -141,6 +145,53 @@ def add_projections(players, seasons, projection_year):
             p['stats'][str(projection_year)] = proj.project_batter(
                 history, [league[s]['bat'] for s in recent], age)
     return {s: {'fip_constant': league[s]['fip']} for s in league}
+
+
+def build_projections(players, seasons, projection_year):
+    """Marcel for everyone, then Steamer for players in projections/steamer-*.csv.
+
+    Returns (league, sources): FIP constants per season, and how many players each
+    projection system covers.
+    """
+    league = add_projections(players, seasons, projection_year)
+    steamer.apply_files(players, projection_year, league[str(max(seasons))]['fip_constant'])
+    n_steamer = sum(1 for p in players if p.get('projection_source') == 'steamer')
+    return league, {'steamer': n_steamer, 'marcel': len(players) - n_steamer}
+
+
+def save_data(players, seasons, projection_year, league, sources):
+    batters = [p for p in players if not p['is_pitcher']]
+    pitchers = [p for p in players if p['is_pitcher']]
+    for name, data in (('players', players), ('batters', batters), ('pitchers', pitchers)):
+        with open(os.path.join(DATA_DIR, f'{name}.json'), 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+    with open(os.path.join(DATA_DIR, 'last_updated.json'), 'w') as f:
+        json.dump({
+            'timestamp': datetime.now().isoformat(),
+            'total_players': len(players),
+            'batters': len(batters),
+            'pitchers': len(pitchers),
+            'seasons': sorted(seasons),
+            'projection_year': projection_year,
+            'projection_method': 'steamer' if sources['steamer'] else 'marcel',
+            'projection_sources': sources,
+            'league': league,
+        }, f)
+    print(f"Saved {len(players)} players ({len(batters)} batters, {len(pitchers)} pitchers); "
+          f"{projection_year} projections: {sources['steamer']} Steamer, {sources['marcel']} Marcel")
+
+
+def rebuild_projections():
+    """Recompute projections from the stats already in data/ (no MLB API calls), e.g. after
+    adding or replacing the Steamer CSVs."""
+    with open(os.path.join(DATA_DIR, 'last_updated.json')) as f:
+        meta = json.load(f)
+    with open(os.path.join(DATA_DIR, 'players.json'), encoding='utf-8') as f:
+        players = json.load(f)
+    seasons, projection_year = meta['seasons'], meta['projection_year']
+    league, sources = build_projections(players, seasons, projection_year)
+    save_data(players, seasons, projection_year, league, sources)
+    return True
 
 
 def eligible_positions(person, season, roster_position, min_games=ELIGIBILITY_GAMES):
@@ -338,7 +389,7 @@ def fetch_players_data(seasons=None, projection_year=None, force=False):
         if not players:
             print("No players fetched; leaving existing data untouched")
             return False
-        league = add_projections(players, seasons, projection_year)
+        league, sources = build_projections(players, seasons, projection_year)
         problem = check_against_existing(players, list(existing.values()), seasons)
         if problem and not force:
             print(f"Not saving: {problem}. Existing data left untouched; use --force to save anyway.")
@@ -346,23 +397,7 @@ def fetch_players_data(seasons=None, projection_year=None, force=False):
         if problem:
             print(f"Saving despite: {problem} (--force)")
 
-        batters = [p for p in players if not p['is_pitcher']]
-        pitchers = [p for p in players if p['is_pitcher']]
-        for name, data in (('players', players), ('batters', batters), ('pitchers', pitchers)):
-            with open(os.path.join(DATA_DIR, f'{name}.json'), 'w', encoding='utf-8') as f:
-                json.dump(data, f)
-        with open(os.path.join(DATA_DIR, 'last_updated.json'), 'w') as f:
-            json.dump({
-                'timestamp': datetime.now().isoformat(),
-                'total_players': len(players),
-                'batters': len(batters),
-                'pitchers': len(pitchers),
-                'seasons': sorted(seasons),
-                'projection_year': projection_year,
-                'projection_method': 'marcel',
-                'league': league,
-            }, f)
-        print(f"Saved {len(players)} players ({len(batters)} batters, {len(pitchers)} pitchers)")
+        save_data(players, seasons, projection_year, league, sources)
         return True
     except Exception as e:
         print(f"Error fetching players data: {e}")
@@ -387,5 +422,9 @@ if __name__ == "__main__":
     parser.add_argument('--projection-year', type=int)
     parser.add_argument('--force', action='store_true',
                         help='save even if the run lost players or stats compared with data/')
+    parser.add_argument('--projections-only', action='store_true',
+                        help='recompute projections (Marcel + Steamer CSVs) from data/ without fetching')
     args = parser.parse_args()
+    if args.projections_only:
+        raise SystemExit(0 if rebuild_projections() else 1)
     raise SystemExit(0 if fetch_players_data(args.seasons, args.projection_year, args.force) else 1)
