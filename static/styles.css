@@ -40,6 +40,12 @@ body {
     line-height: 1.6;
     color: var(--text);
     background-color: var(--background);
+    /* Faded baseball wallpaper (static/img/baseball-pattern.svg) over the soft gradient */
+    background-image: url('img/baseball-pattern.svg'),
+                      linear-gradient(135deg, #F8FAFC 0%, #E2E8F0 50%, #CBD5E1 100%);
+    background-size: 160px 160px, auto;
+    background-repeat: repeat, no-repeat;
+    background-attachment: fixed;
 }
 
 /* Container */
