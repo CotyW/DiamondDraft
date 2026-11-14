@@ -12,6 +12,7 @@ DiamondDraft is a web application for calculating and comparing baseball player 
   - Category Impact: which categories are scarce or deep, and how much each is worth
   - Draft Board & Tiers: player values above replacement level, grouped into tiers
   - Position Scarcity: how steeply value drops at each position (including SP and RP)
+  - Auction values: turns player value into dollars for your budget (e.g. $260 per team), with every drafted player worth at least $1 and an optional hitter/pitcher split
 
 ## How It Works
 DiamondDraft is a static web application (GitHub Pages or a local Flask server). Player data lives in `data/*.json`, refreshed daily from the MLB Stats API by a GitHub Action. All calculations run client-side in your browser.

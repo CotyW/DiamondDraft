@@ -27,13 +27,16 @@
             if (saved.slots) Object.assign(base.slots, saved.slots);
             if (saved.selected) Object.assign(base.selected, saved.selected);
             if (saved.catWeights) base.catWeights = saved.catWeights;
+            if (saved.draftType) base.draftType = saved.draftType;
+            if (saved.budget) base.budget = saved.budget;
+            if (saved.hitterShare !== undefined) base.hitterShare = saved.hitterShare;
         } catch (e) { /* ignore corrupt storage */ }
         return base;
     }
 
     function saveSettings() {
-        const { format, teams, slots, selected, catWeights } = settings;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ format, teams, slots, selected, catWeights }));
+        const { format, teams, slots, selected, catWeights, draftType, budget, hitterShare } = settings;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ format, teams, slots, selected, catWeights, draftType, budget, hitterShare }));
     }
 
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -69,10 +72,20 @@
                     </select>
                 </label>
                 <label>Teams <input type="number" id="analysis-teams" min="2" max="30" value="${settings.teams}"></label>
+                <label>Draft
+                    <select id="analysis-draft">
+                        <option value="snake">Snake</option>
+                        <option value="auction">Auction</option>
+                    </select>
+                </label>
+                ${settings.draftType === 'auction' ? `
+                <label>Budget $<input type="number" id="analysis-budget" min="1" max="10000" value="${settings.budget}" title="Auction budget per team"></label>
+                <label>Hitters % <input type="number" id="analysis-hitter-share" min="0" max="100" placeholder="auto" value="${settings.hitterShare ?? ''}" title="Share of all auction money spent on hitters. Leave blank to split by player value; many leagues spend 65-70% on hitters."></label>` : ''}
                 <span class="slot-inputs"><span class="slot-title">Starters per team:</span> ${slotInputs}</span>
             </div>
             ${catHtml}`;
         settingsEl.querySelector('#analysis-format').value = settings.format;
+        settingsEl.querySelector('#analysis-draft').value = settings.draftType;
     }
 
     settingsEl.addEventListener('change', e => {
@@ -80,6 +93,14 @@
         if (t.id === 'analysis-format') {
             settings.format = t.value;
             renderSettings();
+        } else if (t.id === 'analysis-draft') {
+            settings.draftType = t.value;
+            renderSettings();
+        } else if (t.id === 'analysis-budget') {
+            settings.budget = Math.max(1, parseInt(t.value, 10) || 260);
+        } else if (t.id === 'analysis-hitter-share') {
+            const v = parseFloat(t.value);
+            settings.hitterShare = isNaN(v) ? null : Math.min(100, Math.max(0, v));
         } else if (t.id === 'analysis-teams') {
             settings.teams = Math.max(2, parseInt(t.value, 10) || 12);
         } else if (t.dataset.slot) {
@@ -215,6 +236,7 @@
             list = list.filter(r => r.elig.includes(slot));
         }
         const shown = list.slice(0, boardLimit);
+        const auction = result.auction;
         const zCols = s.format === 'points' ? [] : [
             ...result.categories.bat.filter(c => c.inLeague).map(c => ({ ...c, g: 'bat' })),
             ...result.categories.pit.filter(c => c.inLeague).map(c => ({ ...c, g: 'pit' }))
@@ -237,13 +259,14 @@
                 <td><span class="tier-pill tier-${Math.min(r.tier, 10)}">T${r.tier}</span></td>
                 <td><a href="#" class="player-name-link" data-player-id="${esc(r.id)}">${esc(r.name)}</a></td>
                 <td>${esc(r.team)}</td><td title="Value counted at ${esc(r.pos)}">${esc(r.position || r.pos)}</td>
-                <td><strong>${fmt(r.vorp, 1)}</strong></td>
+                ${auction ? `<td><strong>$${Math.round(r.dollars)}</strong></td>` : ''}
+                <td>${auction ? fmt(r.vorp, 1) : `<strong>${fmt(r.vorp, 1)}</strong>`}</td>
                 <td>${r.posTier ? 'P' + r.posTier : ''}</td>${zs}</tr>`;
         }).join('');
         return `<div class="board-controls"><label>Position <select id="board-pos">${posOptions}</select></label>
-            <span class="analysis-note">Value = ${s.format === 'points' ? 'points' : 'summed category z-scores'} above a replacement-level player at the position. Tiers (T) split where value drops sharply; P-tiers are within a position.</span></div>
+            <span class="analysis-note">Value = ${s.format === 'points' ? 'points' : 'summed category z-scores'} above a replacement-level player at the position. Tiers (T) split where value drops sharply; P-tiers are within a position.${auction ? ` $ = auction value: $${s.budget} × ${s.teams} teams = $${auction.total}, every drafted player at least $1, the rest split by value; ${Math.round(auction.hitterShare * 100)}% goes to hitters${s.hitterShare === null || s.hitterShare === undefined ? ' (by value)' : ''}.` : ''}</span></div>
             <div class="analysis-scroll"><table class="analysis-table board">
-            <thead><tr><th>#</th><th>Tier</th><th>Player</th><th>Team</th><th>Pos</th><th>Value</th><th>Pos tier</th>${head}</tr></thead>
+            <thead><tr><th>#</th><th>Tier</th><th>Player</th><th>Team</th><th>Pos</th>${auction ? '<th title="Auction value">$</th>' : ''}<th>Value</th><th>Pos tier</th>${head}</tr></thead>
             <tbody>${body}</tbody></table></div>
             ${list.length > shown.length ? `<button id="board-more" class="analysis-more">Show more (${list.length - shown.length} left)</button>` : ''}`;
     }

@@ -8,6 +8,9 @@
  *
  * Value = raw value minus the raw value of the best undrafted ("replacement") player at that
  * position, so a scarce position gets credit for what it saves you versus a waiver pickup.
+ *
+ * Auction leagues turn that value into dollars (see auctionValues): every drafted player is worth
+ * at least $1, and the rest of the league's money is split in proportion to value.
  */
 (function (root, factory) {
     if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -63,6 +66,9 @@
         catWeights: {},      // h2h: category key -> weight (default 1)
         pointWeights: {},    // points: { bat: {stat: weight}, pit: {...} } from Scoring Weights (driver column)
         tiers: 10,
+        draftType: 'snake',  // 'auction' adds dollar values
+        budget: 260,         // auction budget per team
+        hitterShare: null,   // auction: % of all money spent on hitters; null = split by value
         minAB: 100,
         minIP: 20
     };
@@ -212,11 +218,11 @@
         return { drafted, replacement };
     }
 
-    function assignTiers(sortedDesc, tierCount, minSize, field) {
+    function assignTiers(sortedDesc, tierCount, minSize, field, valueKey = 'vorp') {
         const n = sortedDesc.length;
         if (n === 0) return;
         const gaps = [];
-        for (let i = 0; i < n - 1; i++) gaps.push({ i, g: sortedDesc[i].vorp - sortedDesc[i + 1].vorp });
+        for (let i = 0; i < n - 1; i++) gaps.push({ i, g: sortedDesc[i][valueKey] - sortedDesc[i + 1][valueKey] });
         gaps.sort((a, b) => b.g - a.g);
         const cuts = [];
         for (const { i } of gaps) {
@@ -230,6 +236,35 @@
             row[field] = tier;
             if (ci < cuts.length && idx === cuts[ci]) { tier++; ci++; }
         });
+    }
+
+    /**
+     * Auction dollars for the drafted players (sets row.dollars). The league's money is
+     * teams x budget. Each drafted player costs at least $1; the money left after those $1s is
+     * split between hitters and pitchers (by their share of total value, or by hitterShare %),
+     * then within each group in proportion to value above replacement. A drafted player at or
+     * below replacement level is a $1 player. The dollars add up to the league's total money.
+     */
+    function auctionValues(board, settings) {
+        const total = num(settings.teams) * num(settings.budget);
+        const groups = { bat: board.filter(r => !r.isPitcher), pit: board.filter(r => r.isPitcher) };
+        const surplus = rows => sum(rows.map(r => Math.max(0, r.vorp)));
+        const value = { bat: surplus(groups.bat), pit: surplus(groups.pit) };
+        const share = settings.hitterShare === null || settings.hitterShare === undefined || settings.hitterShare === ''
+            ? (value.bat + value.pit ? value.bat / (value.bat + value.pit) : groups.bat.length / (board.length || 1))
+            : Math.min(100, Math.max(0, num(settings.hitterShare))) / 100;
+        // Every drafted player needs at least $1, so neither group's share can go below that
+        const lo = total ? groups.bat.length / total : 0, hi = total ? 1 - groups.pit.length / total : 1;
+        const split = lo <= hi ? Math.min(hi, Math.max(lo, share)) : share;
+        const money = { bat: total * split, pit: total * (1 - split) };
+        ['bat', 'pit'].forEach(g => {
+            const rows = groups[g];
+            const extra = Math.max(0, money[g] - rows.length); // after everyone's $1
+            rows.forEach(r => {
+                r.dollars = 1 + (value[g] ? extra * Math.max(0, r.vorp) / value[g] : extra / rows.length);
+            });
+        });
+        return { total, hitterShare: split, spent: sum(board.map(r => r.dollars)) };
     }
 
     function categoryLabel(def, cv) {
@@ -351,12 +386,16 @@
             r.pos = best ? (DISPLAY[best.slot] || best.slot) : normalizePosition(r.position, r.isPitcher);
             r.drafted = alloc.drafted.has(r);
         });
-        const board = rows.filter(r => r.drafted).sort((a, b) => b.vorp - a.vorp);
+        const board = rows.filter(r => r.drafted);
+        // Auction boards rank by dollars: with a set hitter/pitcher split, that order can differ from value
+        const auction = settings.draftType === 'auction' ? auctionValues(board, settings) : null;
+        const key = auction ? 'dollars' : 'vorp';
+        board.sort((a, b) => b[key] - a[key] || b.vorp - a.vorp);
         board.forEach((r, i) => { r.rank = i + 1; });
-        assignTiers(board, settings.tiers, 3, 'tier');
+        assignTiers(board, settings.tiers, 3, 'tier', key);
         ['C', '1B', '2B', '3B', 'SS', 'OF', 'DH', 'SP', 'RP', 'P'].forEach(pos => {
             const list = board.filter(r => r.pos === pos);
-            assignTiers(list, Math.max(1, Math.min(5, Math.floor(list.length / 4))), 2, 'posTier');
+            assignTiers(list, Math.max(1, Math.min(5, Math.floor(list.length / 4))), 2, 'posTier', key);
         });
 
         const pool = board;
@@ -368,9 +407,10 @@
             categories: { bat: bat.categories, pit: pit.categories },
             correlations: { bat: bat.correlations, pit: pit.correlations },
             positions: analyzePositions(rows, alloc.drafted, settings, alloc.replacement),
+            auction,
             meta: { candidates: rows.length, drafted: board.length, replacement: alloc.replacement }
         };
     }
 
-    return { analyze, DEFAULT_SETTINGS, CATS, normalizePosition, eligibleSlots };
+    return { analyze, auctionValues, DEFAULT_SETTINGS, CATS, normalizePosition, eligibleSlots };
 });
