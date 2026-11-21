@@ -79,94 +79,6 @@
     margin: 0;
     padding: 0;
 }
-/* Header Layout */
-.site-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 20px 40px;
-    background: var(--white);
-    box-shadow: var(--card-shadow);
-    margin-bottom: 30px;
-    border-bottom: 3px solid var(--primary-blue);
-    position: sticky;
-    top: 0;
-    z-index: 1000;
-    transition: padding 0.2s ease, box-shadow 0.2s ease;
-}
-
-.logo-container {
-    flex: 0 0 auto;
-}
-
-.logo {
-    max-height: 200px;
-    width: auto;
-    cursor: pointer;
-    transition: max-height 0.2s ease;
-}
-
-.site-header.scrolled {
-    padding: 12px 28px;
-    box-shadow: 0 6px 16px rgba(0,0,0,0.08);
-}
-
-.site-header.scrolled .logo {
-    max-height: 150px;
-}
-
-.title-container {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
-.login-container {
-    flex: 0 0 auto;
-}
-
-.login-btn {
-    background-color: var(--success);
-    padding: 12px 30px;
-    font-size: 1rem;
-    font-weight: 600;
-    border-radius: 8px;
-}
-
-.login-btn:hover {
-    background-color: #15A34A;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .site-header {
-        flex-direction: column;
-        text-align: center;
-        padding: 20px;
-    }
-    
-    .logo-container {
-        margin-bottom: 15px;
-    }
-    
-    .logo {
-        max-height: 150px;
-    }
-    
-    .title-container {
-        margin-bottom: 15px;
-    }
-    
-    .login-container {
-        width: 100%;
-    }
-    
-    .login-btn {
-        width: 100%;
-    }
-}
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -202,13 +114,6 @@ h1 {
     letter-spacing: -0.5px;
 }
 
-.tagline {
-    text-align: center;
-    margin-bottom: 30px;
-    font-size: 1.2rem;
-    color: var(--primary-blue);
-    font-weight: 500;
-}
 
 h2 {
     font-size: 1.6rem;

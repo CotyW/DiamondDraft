@@ -159,7 +159,8 @@ def build_projections(players, seasons, projection_year):
     return league, {'steamer': n_steamer, 'marcel': len(players) - n_steamer}
 
 
-def save_data(players, seasons, projection_year, league, sources):
+def save_data(players, seasons, projection_year, league, sources, timestamp=None):
+    """Write data/*.json. timestamp is when the stats were fetched (default: now)."""
     batters = [p for p in players if not p['is_pitcher']]
     pitchers = [p for p in players if p['is_pitcher']]
     for name, data in (('players', players), ('batters', batters), ('pitchers', pitchers)):
@@ -167,7 +168,7 @@ def save_data(players, seasons, projection_year, league, sources):
             json.dump(data, f)
     with open(os.path.join(DATA_DIR, 'last_updated.json'), 'w') as f:
         json.dump({
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': timestamp or datetime.now().isoformat(),
             'total_players': len(players),
             'batters': len(batters),
             'pitchers': len(pitchers),
@@ -190,7 +191,8 @@ def rebuild_projections():
         players = json.load(f)
     seasons, projection_year = meta['seasons'], meta['projection_year']
     league, sources = build_projections(players, seasons, projection_year)
-    save_data(players, seasons, projection_year, league, sources)
+    # Only the projections changed, so keep the time the stats were fetched
+    save_data(players, seasons, projection_year, league, sources, timestamp=meta.get('timestamp'))
     return True
 
 

@@ -14,41 +14,30 @@
     <!-- Supabase JS library -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
-    <div class="container">
-        <header class="site-header">
-            <div class="logo-container">
-                <img src="static/DDlogo2.png" alt="DiamondDraft Logo" class="logo">
-            </div>
-            <div class="title-container">
-                <h1>DiamondDraft</h1>
-                <p class="tagline">Baseball Player Value Calculator</p>
-            </div>
+<body id="top">
+    <!-- Slim sticky bar: brand, section links, data freshness (filled by main.js), login -->
+    <header class="site-header">
+        <div class="header-inner">
+            <a class="brand" href="#top" aria-label="DiamondDraft, back to top">
+                <img src="static/DDlogo2.png" alt="" class="logo">
+                <div class="brand-text">
+                    <h1>DiamondDraft</h1>
+                    <span class="tagline">Fantasy baseball draft values</span>
+                </div>
+            </a>
+            <nav class="site-nav" aria-label="Page sections">
+                <a href="#rankings">Rankings</a>
+                <a href="#draft-analysis">Draft Analysis</a>
+                <a href="#scoring" id="nav-scoring" aria-haspopup="dialog">Scoring</a>
+            </nav>
+            <div class="data-status" id="data-status" aria-live="polite"></div>
             <div class="login-container">
                 <button id="login-btn" class="login-btn" aria-label="Open login modal">Login</button>
             </div>
-        </header>
-        
-        <div class="controls">
-            <div class="scoring-section">
-                <h2>Scoring Weights</h2>
-                <div class="weight-inputs">
-                    <!-- Inputs are built by main.js from static/stats.js -->
-                    <div class="weight-column">
-                        <h3>Batting</h3>
-                        <div id="weights-bat"></div>
-                    </div>
-                    <div class="weight-column">
-                        <h3>Pitching</h3>
-                        <div id="weights-pit"></div>
-                    </div>
-                </div>
-                <button id="calculate-btn">Calculate Player Values</button>
-            </div>
         </div>
-    </div>
-    
-    <div class="results-section">
+    </header>
+
+    <div class="results-section" id="rankings">
             <h2>Player Rankings</h2>
             
             <div class="options-row">
@@ -91,6 +80,7 @@
                 </div>
 
                 <div class="advanced-toggle">
+                    <button type="button" id="scoring-open" class="scoring-open" aria-haspopup="dialog" aria-controls="scoring-modal">Scoring Weights</button>
                     <button id="advanced-filters-toggle" aria-expanded="false" aria-controls="advanced-filters">Advanced Filters</button>
                 </div>
             </div>
@@ -212,6 +202,30 @@
     <script src="static/valuation.js"></script>
     <script src="static/analysis.js"></script>
     
+    <!-- Scoring Weights modal, opened from Player Rankings (and the header's Scoring link) -->
+    <div id="scoring-modal" class="modal scoring-modal" role="dialog" aria-modal="true" aria-labelledby="scoring-title">
+        <div class="modal-content">
+            <button type="button" class="close-btn scoring-close" aria-label="Close scoring weights">&times;</button>
+            <h2 id="scoring-title">Scoring Weights</h2>
+            <p class="scoring-note">Points per stat. They set the Points column and the points-league draft analysis.</p>
+            <div class="weight-inputs">
+                <!-- Inputs are built by main.js from static/stats.js -->
+                <div class="weight-column">
+                    <h3>Batting</h3>
+                    <div id="weights-bat"></div>
+                </div>
+                <div class="weight-column">
+                    <h3>Pitching</h3>
+                    <div id="weights-pit"></div>
+                </div>
+            </div>
+            <div class="scoring-actions">
+                <button type="button" id="scoring-reset" class="scoring-reset">Reset to defaults</button>
+                <button type="button" id="calculate-btn">Apply</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Player Card Modal -->
     <div id="player-card-modal" class="modal">
         <div class="modal-content player-card-content">

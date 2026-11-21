@@ -103,6 +103,29 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     window.DDReadWeights = readWeights; // the analysis panel reads these for points leagues
 
+    // Header: when the stats were last updated and which projection system the data uses
+    async function showDataStatus() {
+        const el = document.getElementById('data-status');
+        if (!el || typeof loadMeta !== 'function') return;
+        try {
+            const meta = await loadMeta();
+            const parts = [];
+            const updated = meta.timestamp ? new Date(meta.timestamp) : null;
+            if (updated && !isNaN(updated)) {
+                const date = updated.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                parts.push(`Stats updated <strong>${date}</strong>`);
+            }
+            if (meta.projection_year) {
+                const method = meta.projection_method === 'steamer' ? 'Steamer + Marcel' : 'Marcel';
+                parts.push(`${meta.projection_year} projections: <strong>${method}</strong>`);
+            }
+            el.innerHTML = parts.join('<br>');
+        } catch (e) {
+            el.textContent = '';
+        }
+    }
+    showDataStatus();
+
     // Header scroll state
     const handleHeaderScroll = () => {
         if (!siteHeader) return;
@@ -121,7 +144,57 @@ document.addEventListener('DOMContentLoaded', function() {
     hydratePresetsDropdown();
     
     // Event listeners
-    calculateBtn.addEventListener('click', calculatePlayerValues);
+    // Scoring Weights modal: opened from Player Rankings or the header's Scoring link.
+    // Apply recalculates points; closing without Apply puts back the last applied weights.
+    const scoringModal = document.getElementById('scoring-modal');
+    let scoringOpener = null;
+    let appliedWeights = null;
+
+    function setWeightInputs(weights) {
+        document.querySelectorAll('.weight-inputs input[data-stat]').forEach(input => {
+            const v = weights[input.dataset.group][input.dataset.stat];
+            if (v !== undefined) input.value = v;
+        });
+    }
+    function openScoring(e) {
+        if (e) e.preventDefault();
+        if (!scoringModal) return;
+        scoringOpener = document.activeElement;
+        appliedWeights = readWeights();
+        scoringModal.style.display = 'block';
+        activateFocusTrap(scoringModal);
+        const firstInput = scoringModal.querySelector('input');
+        if (firstInput) firstInput.focus();
+    }
+    function closeScoring(apply) {
+        if (!scoringModal || scoringModal.style.display !== 'block') return;
+        if (apply) calculatePlayerValues();
+        else if (appliedWeights) setWeightInputs(appliedWeights);
+        scoringModal.style.display = 'none';
+        activeModal = null;
+        if (scoringOpener && scoringOpener.focus) scoringOpener.focus();
+    }
+    ['scoring-open', 'nav-scoring'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', openScoring);
+    });
+    calculateBtn.addEventListener('click', () => closeScoring(true));
+    if (scoringModal) {
+        scoringModal.querySelector('.scoring-close').addEventListener('click', () => closeScoring(false));
+        document.getElementById('scoring-reset').addEventListener('click', () => setWeightInputs(S.defaultWeights()));
+        // Enter in a weight box applies, like submitting a form
+        scoringModal.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && e.target.matches('input')) { e.preventDefault(); closeScoring(true); }
+        });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeScoring(false); });
+        // A click outside the dialog card (the dimmed overlay, or the header) closes it;
+        // the opener buttons are outside too, so skip those
+        const scoringCard = scoringModal.querySelector('.modal-content');
+        document.addEventListener('click', e => {
+            if (scoringModal.style.display === 'block' && !scoringCard.contains(e.target)
+                && !e.target.closest('#scoring-open, #nav-scoring')) closeScoring(false);
+        });
+    }
     
     // Use event delegation for player name clicks
     document.addEventListener('click', function(e) {
