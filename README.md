@@ -70,7 +70,11 @@ To go back to Marcel only, delete the CSVs and run `--projections-only` again.
 The season years are set in one place: `DEFAULT_SEASONS` in `fetch_data.py`. Add the new season there (the projection is always the year after the last one) and run the fetch. The page builds its season tabs from `data/last_updated.json`, so nothing else needs editing.
 
 ### Running Tests
-Tests live in `tests/`: the draft valuation engine and stat definitions (JavaScript) and the projection CSV upload (JavaScript), and the projections and projection CSV import (Python). Run `npm test` for both; it needs Node 22+ and Python 3, with no packages to install. They also run on GitHub for every push.
+Tests live in `tests/`. Run `npm test` for all of them; it needs Node 22+ and Python 3 with `requirements.txt` installed, and no npm packages. They also run on GitHub for every push.
+- JavaScript (`node --test`): the valuation engine, stat definitions, projection and ADP upload, tiers and live-draft math, and the page scripts: the Draft Analysis panel, Live Draft and Position Tiers tabs, and the data loader. The page scripts run in a sandbox with a small stand-in for the page (`tests/helpers/browser.js`), so no browser is needed.
+- Python (`unittest`): projections, projection CSV import, the MLB data fetch (with the API mocked), the Flask server, the GitHub Pages build (including a check that `index.html` matches the template) and the Supabase upload records.
+
+`main.js` (Player Rankings, upload window, player card) has no automated tests yet; check it in a browser after changing it.
 
 ### Publishing to GitHub Pages
 The root `index.html` is generated from `templates/index.html`. After editing the template, run `python build_pages.py` and commit the result.
