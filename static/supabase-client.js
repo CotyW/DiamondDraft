@@ -55,15 +55,48 @@ function loadStaticPlayers() {
     return staticDataPromise;
 }
 
+// Projection system for the projection year. A player's stats hold their default system's
+// line (projection_source, or Marcel when unset); player.projections holds the others, Marcel's
+// included. 'upload' is a CSV the visitor uploaded (projection-upload.js). Any system falls
+// back to Marcel for players it doesn't cover.
+let projectionSource = null;  // null = each player's default
+let uploadedLines = {};        // {playerId: stat line}
+function setProjectionSource(source) { projectionSource = source || null; }
+function setUploadedProjections(lines) { uploadedLines = lines || {}; }
+
+// Display names, matching projection_csv.LABELS; uploads use the name the visitor gave
+const PROJECTION_LABELS = { marcel: 'Marcel', steamer: 'Steamer', zips: 'ZiPS', zipsdc: 'ZiPS DC',
+    atc: 'ATC', thebat: 'THE BAT', thebatx: 'THE BAT X', depthcharts: 'Depth Charts', oopsy: 'OOPSY',
+    pecota: 'PECOTA', davenport: 'Davenport', upload: 'Your upload' };
+function projectionLabel(source) {
+    if (!source) return 'Marcel';
+    return PROJECTION_LABELS[source] || (source.length <= 4 ? source.toUpperCase() : source[0].toUpperCase() + source.slice(1));
+}
+
+/** [line, source] for a player's projection-year stats under the chosen system. */
+function projectionFor(p, year) {
+    const own = p.projection_source || 'marcel';
+    const stored = (p.stats && p.stats[year]) || {};
+    const others = p.projections || {};
+    const want = projectionSource || own;
+    if (want === 'upload' && uploadedLines[String(p.id)]) return [uploadedLines[String(p.id)], 'upload'];
+    if (want === own) return [stored, own];
+    if (others[want]) return [others[want], want];
+    return own === 'marcel' ? [stored, 'marcel'] : [others.marcel || stored, 'marcel'];
+}
+
 async function fetchStaticPlayers(filter, seasons) {
-    const players = await loadStaticPlayers();
+    const [players, meta] = await Promise.all([loadStaticPlayers(), loadMeta().catch(() => ({}))]);
+    const projectionYear = meta.projection_year ? String(meta.projection_year) : null;
     const list = players.map(p => {
         const statsBySeason = {};
+        let source = p.projection_source || 'marcel';
         seasons.forEach(season => {
-            const flat = (p.stats && p.stats[season]) || {};
+            let flat = (p.stats && p.stats[season]) || {};
+            if (String(season) === projectionYear) [flat, source] = projectionFor(p, projectionYear);
             statsBySeason[season] = { batting: { ...flat }, pitching: { ...flat } };
         });
-        return { ...p, player_id: p.id, stats_by_season: statsBySeason };
+        return { ...p, player_id: p.id, projection_source: source, stats_by_season: statsBySeason };
     });
     if (filter === 'batter') return list.filter(p => !p.is_pitcher);
     if (filter === 'pitcher') return list.filter(p => p.is_pitcher);

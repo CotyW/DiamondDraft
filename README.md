@@ -13,11 +13,16 @@ DiamondDraft is a web application for calculating and comparing baseball player 
   - Draft Board & Tiers: player values above replacement level, grouped into tiers
   - Position Scarcity: how steeply value drops at each position (including SP and RP)
   - Auction values: turns player value into dollars for your budget (e.g. $260 per team), with every drafted player worth at least $1 and an optional hitter/pitcher split
+- Projections dropdown for the projected season, with **Upload CSV** for your own projection files (kept in your browser)
 
 ## How It Works
 DiamondDraft is a static web application (GitHub Pages or a local Flask server). Player data lives in `data/*.json`, refreshed daily from the MLB Stats API by a GitHub Action. All calculations run client-side in your browser.
 
-The projection uses Steamer for every player covered by the Steamer CSVs in `projections/` (see [Using Steamer Projections](#using-steamer-projections)), and the Marcel method for everyone else. The player card shows which one a player's projection comes from.
+Every player gets a Marcel projection. Other systems (Steamer, ZiPS, ATC, THE BAT, ...) can be added two ways, and each one falls back to Marcel for players it doesn't cover:
+- **On the site:** anyone can click **Upload CSV** beside the Projections dropdown in Player Rankings and load their own projection files. The files are read in the browser, saved there, and never sent to a server. The upload window explains the file format and has template files.
+- **In the data:** CSVs in `projections/` are built into `data/` (see [Using Projection Systems](#using-projection-systems)).
+
+The Projections dropdown switches the projected season between the available systems. The player card shows which one a player's projection comes from.
 
 Marcel is a deliberately simple and widely used baseline (`projections.py`):
 - The last three seasons are weighted 5/4/3 for batters and 3/2/1 for pitchers, newest heaviest.
@@ -46,21 +51,23 @@ A full run makes about 1,800 API calls and takes roughly 15 minutes. It writes `
 
 Failed requests are retried. If a run still comes back with more than 5% fewer players than `data/players.json`, or 5% fewer players with stats in any season both cover, it leaves the existing files alone and exits with an error, so the daily Action doesn't publish a half-failed fetch. Add `--force` to save anyway.
 
-### Using Steamer Projections
-1. On FanGraphs, open the Steamer projections for batters, click "Export Data", and save the file as `projections/steamer-batters.csv`. Do the same for pitchers as `projections/steamer-pitchers.csv`.
-2. Run `python fetch_data.py --projections-only`. This rebuilds the projections from the stats already in `data/`, with no MLB API calls, and prints how many players it matched.
+### Using Projection Systems
+1. Save each system's batters and pitchers projections in `projections/` as `<system>-batters.csv` and `<system>-pitchers.csv`, e.g. `steamer-batters.csv` or `zips-pitchers.csv`. The system name is lowercase letters and digits. On FanGraphs, open a system's projections page and click "Export Data"; those files work as they are. For other sources, see the column list in `projections/README.md`.
+2. Run `python fetch_data.py --projections-only`. This rebuilds the projections from the stats already in `data/`, with no MLB API calls, and prints how many players each system matched.
 
-The CSVs are in `.gitignore` and must stay out of the repo: FanGraphs' terms don't allow republishing their data, and Steamer exports are for FanGraphs members. Keep in mind that the rebuilt `data/` files also contain the Steamer numbers, so committing them would publish Steamer on the public site.
+Each system becomes an option in the Projections dropdown. When several cover a player, the default is the first in `PREFERRED_ORDER` in `projection_csv.py` (ATC, Depth Charts, THE BAT X, THE BAT, Steamer, ZiPS, then the rest by name). Known systems get proper names (`thebatx` shows as "THE BAT X"); add new ones to `LABELS` there and in `static/supabase-client.js`.
 
-Players are matched by MLB id (the export's `MLBAMID` column), or by name when a file has none. Players Steamer covers that aren't in our data, mostly minor leaguers, are skipped. Players Steamer doesn't cover keep their Marcel projection. The daily Action doesn't have the CSVs, so its runs use Marcel only. Replace your local CSVs whenever you want newer projections. Make sure they're for the projection year (the year after the last season in `DEFAULT_SEASONS`).
+The CSVs are in `.gitignore` and must stay out of the repo: FanGraphs' terms don't allow republishing their data. Keep in mind that the rebuilt `data/` files also contain the numbers, so committing them would publish those projections on the public site. For a public site, the Upload CSV button is the safer route: each visitor uses their own files.
 
-To go back to Marcel only, delete the two CSVs and run `--projections-only` again.
+Players are matched by MLB id (the export's `MLBAMID` column), or by name when a file has none. Rows for players not in our data, mostly minor leaguers, are skipped. The daily Action doesn't have the CSVs, so its runs use Marcel only. Replace your local CSVs whenever you want newer projections. Make sure they're for the projection year (the year after the last season in `DEFAULT_SEASONS`).
+
+To go back to Marcel only, delete the CSVs and run `--projections-only` again.
 
 ### Rolling Over to a New Season
 The season years are set in one place: `DEFAULT_SEASONS` in `fetch_data.py`. Add the new season there (the projection is always the year after the last one) and run the fetch. The page builds its season tabs from `data/last_updated.json`, so nothing else needs editing.
 
 ### Running Tests
-Tests live in `tests/`: the draft valuation engine and stat definitions (JavaScript) and the projections and Steamer import (Python). Run `npm test` for both; it needs Node 22+ and Python 3, with no packages to install. They also run on GitHub for every push.
+Tests live in `tests/`: the draft valuation engine and stat definitions (JavaScript) and the projection CSV upload (JavaScript), and the projections and projection CSV import (Python). Run `npm test` for both; it needs Node 22+ and Python 3, with no packages to install. They also run on GitHub for every push.
 
 ### Publishing to GitHub Pages
 The root `index.html` is generated from `templates/index.html`. After editing the template, run `python build_pages.py` and commit the result.
@@ -82,7 +89,8 @@ For long-term storage in Supabase:
 - `static/supabase-client.js` - Loads data from static JSON or Supabase
 - `fetch_data.py` - Fetches and processes MLB data
 - `projections.py` - Season stat lines and the Marcel projection
-- `steamer.py` - Reads Steamer CSV exports from `projections/` and applies them
+- `projection_csv.py` - Reads projection-system CSVs (Steamer, ZiPS, ...) from `projections/` and applies them
+- `static/projection-upload.js` - Reads projection CSVs visitors upload in the browser
 - `upload_static_to_supabase.py`, `supabase_schema.sql` - Supabase setup
 - `tests/` - Tests for the valuation engine, stat definitions and projections (`npm test`)
 - `.github/workflows/update-data.yml` - Daily data update

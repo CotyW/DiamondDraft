@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const tableContainer = document.querySelector('.table-container');
     const positionFilter = document.getElementById('position-filter');
     const yearButtonsEl = document.getElementById('year-buttons');
+    const projectionSourceEl = document.getElementById('projection-source');
     const playerSearch = document.getElementById('player-search');
     const dataTimestamp = document.getElementById('data-timestamp');
     const loginBtn = document.getElementById('login-btn');
@@ -80,6 +81,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Stat definitions shared by the table, player card, comparison and scoring inputs
     const S = window.DDStats;
 
+    // For text from uploads (file names, player names) that goes into innerHTML
+    function escapeHtml(text) {
+        return String(text).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+    }
+
     // Scoring Weights: one input per scorable stat, ids like "w-bat-hr"
     function renderWeightInputs() {
         ['bat', 'pit'].forEach(group => {
@@ -116,7 +122,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 parts.push(`Stats updated <strong>${date}</strong>`);
             }
             if (meta.projection_year) {
-                const method = meta.projection_method === 'steamer' ? 'Steamer + Marcel' : 'Marcel';
+                const systems = (meta.projection_systems || []).map(s => s.label);
+                const method = systems.length ? `${systems.join(', ')} + Marcel` : 'Marcel';
                 parts.push(`${meta.projection_year} projections: <strong>${method}</strong>`);
             }
             el.innerHTML = parts.join('<br>');
@@ -440,6 +447,7 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.classList.add('active');
 
             currentYear = btn.dataset.year;
+            updateProjectionSourceState();
             await ensureSeasonLoaded(currentYear);
 
             // Recalculate points for new year selection
@@ -447,6 +455,209 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Projection system dropdown: picks which projection the projected season shows. Options
+    // come from the CSV systems in data/last_updated.json, plus Marcel and a visitor's upload;
+    // every system uses Marcel for players it doesn't cover.
+    const PROJECTION_SOURCE_KEY = 'dd-projection-source';
+    const UPLOAD_KEY = 'dd-uploaded-projections';
+    const U = window.DDUpload;
+    let projectionSystems = [];  // [{key, label, players}] from the data, default first
+    let uploaded = null;          // {name, files: [{kind, filename, matched, rows, unmatched}], lines}
+
+    function readUploaded() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(UPLOAD_KEY) || 'null');
+            return saved && saved.lines ? saved : null;
+        } catch (e) { return null; }
+    }
+
+    function updateProjectionSourceState() {
+        if (!projectionSourceEl) return;
+        const onProjection = isProjected(currentYear);
+        projectionSourceEl.disabled = !onProjection || projectionSourceEl.options.length < 2;
+        projectionSourceEl.title = onProjection ? '' : `Choose ${projectionYear || 'the projected season'} to switch projection systems`;
+    }
+
+    function renderProjectionOptions(selected) {
+        if (!projectionSourceEl) return;
+        const opts = projectionSystems.map(s => [s.key, `${s.label} + Marcel`]);
+        if (uploaded) opts.push(['upload', `${uploaded.name} (upload) + Marcel`]);
+        opts.push(['marcel', 'Marcel only']);
+        projectionSourceEl.innerHTML = opts.map(([v, t]) => `<option value="${v}">${escapeHtml(t)}</option>`).join('');
+        const keys = opts.map(o => o[0]);
+        projectionSourceEl.value = keys.includes(selected) ? selected : keys[0];
+        updateProjectionSourceState();
+    }
+
+    async function initProjectionSource() {
+        if (!projectionSourceEl) return;
+        try {
+            const meta = await loadMeta();
+            projectionSystems = meta.projection_systems
+                || (meta.projection_method === 'steamer' ? [{ key: 'steamer', label: 'Steamer' }] : []);
+        } catch (e) { projectionSystems = []; }
+        uploaded = readUploaded();
+        if (uploaded) setUploadedProjections(uploaded.lines);
+        let saved = null;
+        try { saved = localStorage.getItem(PROJECTION_SOURCE_KEY); } catch (e) { /* storage blocked */ }
+        renderProjectionOptions(saved);
+        setProjectionSource(projectionSourceEl.value);
+    }
+
+    // Reload the projected season with the chosen system, then rescore
+    async function applyProjectionSource(source) {
+        try { localStorage.setItem(PROJECTION_SOURCE_KEY, source); } catch (e) { /* storage blocked */ }
+        setProjectionSource(source);
+        if (projectionYear === null) return;
+        const yearStr = String(projectionYear);
+        const fresh = await fetchPlayersWithStats('all', [projectionYear]);
+        const byId = new Map(fresh.map(p => [String(p.id), p]));
+        allPlayers.forEach(p => {
+            const np = byId.get(String(p.id));
+            if (!np) return;
+            p.stats_by_season = { ...p.stats_by_season, [yearStr]: np.stats_by_season[yearStr] };
+            p.projection_source = np.projection_source;
+        });
+        loadedSeasons.add(yearStr);
+        playerCardCache.clear();
+        calculatePlayerValues();
+    }
+
+    if (projectionSourceEl) {
+        projectionSourceEl.addEventListener('change', () => applyProjectionSource(projectionSourceEl.value));
+    }
+
+    // Upload modal: read the chosen CSVs, match them to our players, keep the result in this
+    // browser (localStorage) and switch the projected season to it. Nothing is sent anywhere.
+    const uploadModal = document.getElementById('upload-modal');
+    const uploadInput = document.getElementById('upload-files');
+    const uploadNameEl = document.getElementById('upload-name');
+    const uploadStatus = document.getElementById('upload-status');
+    const uploadCurrent = document.getElementById('upload-current');
+    let uploadOpener = null;
+
+    function showUploadStatus(html, isError) {
+        uploadStatus.innerHTML = html;
+        uploadStatus.classList.toggle('error', !!isError);
+    }
+
+    function renderUploadCurrent() {
+        if (!uploadCurrent) return;
+        if (!uploaded) { uploadCurrent.hidden = true; return; }
+        const files = uploaded.files.map(f =>
+            `${escapeHtml(f.filename)}: ${f.matched} of ${f.rows} ${f.kind} matched`).join('<br>');
+        uploadCurrent.querySelector('.upload-current-info').innerHTML =
+            `<strong>${escapeHtml(uploaded.name)}</strong><br>${files}`;
+        uploadCurrent.hidden = false;
+    }
+
+    function openUpload() {
+        if (!uploadModal) return;
+        uploadOpener = document.activeElement;
+        showUploadStatus('');
+        renderUploadCurrent();
+        uploadModal.style.display = 'block';
+        activateFocusTrap(uploadModal);
+    }
+    function closeUpload() {
+        if (!uploadModal || uploadModal.style.display !== 'block') return;
+        uploadModal.style.display = 'none';
+        activeModal = null;
+        if (uploadOpener && uploadOpener.focus) uploadOpener.focus();
+    }
+
+    async function useUploadedFiles() {
+        const files = Array.from(uploadInput.files || []);
+        if (!files.length) { showUploadStatus('Choose a batters file, a pitchers file, or both.', true); return; }
+        if (files.length > 2) { showUploadStatus('Choose at most two files: one batters, one pitchers.', true); return; }
+        let meta = {};
+        try { meta = await loadMeta(); } catch (e) { /* use the default FIP constant */ }
+        const lastSeason = meta.seasons && meta.seasons.length ? String(Math.max(...meta.seasons)) : null;
+        const fip = lastSeason && meta.league && meta.league[lastSeason] ? meta.league[lastSeason].fip_constant : undefined;
+        const fresh = { name: uploadNameEl.value.trim() || 'My projections', files: [], lines: {} };
+        const kinds = new Set();
+        for (const file of files) {
+            let parsed;
+            try {
+                parsed = U.readProjectionFile(await file.text());
+            } catch (e) {
+                showUploadStatus(`<strong>${escapeHtml(file.name)}</strong>: ${escapeHtml(e.message)}`, true);
+                return;
+            }
+            if (kinds.has(parsed.kind)) {
+                showUploadStatus(`Both files look like ${parsed.kind} files. A pitchers file needs an IP column.`, true);
+                return;
+            }
+            kinds.add(parsed.kind);
+            const result = U.matchRows(allPlayers, parsed, fip);
+            Object.assign(fresh.lines, result.lines);
+            fresh.files.push({ kind: parsed.kind, filename: file.name, matched: result.matched,
+                rows: parsed.rows.length, unmatched: result.unmatched.slice(0, 5) });
+        }
+        if (!Object.keys(fresh.lines).length) {
+            showUploadStatus('No rows matched our players. Check the Name column, or add an MLBAMID column.', true);
+            return;
+        }
+        uploaded = fresh;
+        let stored = true;
+        try { localStorage.setItem(UPLOAD_KEY, JSON.stringify(uploaded)); } catch (e) { stored = false; }
+        setUploadedProjections(uploaded.lines);
+        renderProjectionOptions('upload');
+        renderUploadCurrent();
+        uploadInput.value = '';
+        const summary = uploaded.files.map(f => {
+            const missed = f.rows - f.matched;
+            const examples = f.unmatched.length ? ` (e.g. ${f.unmatched.map(escapeHtml).join(', ')})` : '';
+            return `${f.matched} of ${f.rows} ${f.kind} matched${missed ? `; ${missed} aren't in our player list${examples}` : ''}.`;
+        }).join('<br>');
+        showUploadStatus(summary + (stored ? '' : '<br>Your browser wouldn\'t save the file, so it lasts until you leave this page.'));
+        // Show the result: switch to the projected season if another one is selected
+        if (!isProjected(currentYear) && yearButtonsEl) {
+            const btn = yearButtonsEl.querySelector(`.year-btn[data-year="${projectionYear}"]`);
+            if (btn) btn.click();
+        }
+        await applyProjectionSource('upload');
+    }
+
+    async function removeUpload() {
+        uploaded = null;
+        try { localStorage.removeItem(UPLOAD_KEY); } catch (e) { /* storage blocked */ }
+        setUploadedProjections({});
+        const wasUpload = projectionSourceEl.value === 'upload';
+        renderProjectionOptions(wasUpload ? null : projectionSourceEl.value);
+        renderUploadCurrent();
+        showUploadStatus('Upload removed.');
+        if (wasUpload) await applyProjectionSource(projectionSourceEl.value);
+    }
+
+    function downloadTemplate(kind) {
+        const url = URL.createObjectURL(new Blob([U.TEMPLATES[kind]], { type: 'text/csv' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `projections-${kind}-template.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+
+    if (uploadModal && U && projectionSourceEl) {
+        document.getElementById('upload-open').addEventListener('click', openUpload);
+        uploadModal.querySelector('.upload-close').addEventListener('click', closeUpload);
+        document.getElementById('upload-submit').addEventListener('click', useUploadedFiles);
+        document.getElementById('upload-remove').addEventListener('click', removeUpload);
+        uploadModal.querySelectorAll('[data-template]').forEach(btn =>
+            btn.addEventListener('click', () => downloadTemplate(btn.dataset.template)));
+        // The file name is a handy default name for the set: "zips-batters.csv" -> "zips"
+        uploadInput.addEventListener('change', () => {
+            if (!uploadNameEl.value.trim() && uploadInput.files.length) {
+                uploadNameEl.value = uploadInput.files[0].name.replace(/\.csv$/i, '').replace(/[-_ ](batters|pitchers|hitters)$/i, '');
+            }
+        });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeUpload(); });
+        uploadModal.addEventListener('click', e => { if (e.target === uploadModal) closeUpload(); });
+    }
+
     // Table header: built per view from the stat definitions; clicks are handled on the <thead>
     const headRow = document.getElementById('players-head');
     let tableColumns = S.columns('all');
@@ -493,6 +704,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Start on the latest season with actual stats; other seasons load when selected
             const seasonConfig = await getSeasonConfig();
             projectionYear = seasonConfig.projectionYear;
+            await initProjectionSource();
             const latestSeason = seasonConfig.seasons[seasonConfig.seasons.length - 1];
             currentYear = String(latestSeason);
             renderYearButtons(seasonConfig.seasons);
@@ -567,6 +779,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     ...existing.stats_by_season,
                     ...np.stats_by_season
                 };
+                if (isProjected(yearStr)) existing.projection_source = np.projection_source;
             } else {
                 allPlayers.push(np);
             }
@@ -931,7 +1144,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 <div class="player-card-stats">
                     <div class="stats-section">
-                        <h3>${player.is_pitcher ? 'Pitching' : 'Batting'} Stats (${seasonLabel(currentYear)}${isProjected(currentYear) ? (player.projection_source === 'steamer' ? ', Steamer' : ', Marcel') : ''})</h3>
+                        <h3>${player.is_pitcher ? 'Pitching' : 'Batting'} Stats (${seasonLabel(currentYear)}${isProjected(currentYear) ? `, ${escapeHtml(player.projection_source === 'upload' && uploaded ? uploaded.name : projectionLabel(player.projection_source))}` : ''})</h3>
                         <div class="stats-grid">${statItems}
                         </div>
                     </div>

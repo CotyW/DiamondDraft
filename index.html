@@ -46,6 +46,15 @@
                     <!-- Season buttons are built by main.js from data/last_updated.json -->
                     <div class="toggle-buttons" id="year-buttons"></div>
                 </div>
+
+                <div class="filter-section projection-source">
+                    <label for="projection-source">Projections:</label>
+                    <!-- Options are built by main.js; used for the projected season only -->
+                    <select id="projection-source" aria-label="Projection system for the projected season" disabled>
+                        <option value="marcel">Marcel only</option>
+                    </select>
+                    <button type="button" id="upload-open" class="upload-open" aria-haspopup="dialog" aria-controls="upload-modal" title="Use your own projections from a CSV file">Upload CSV</button>
+                </div>
                 
                 <div class="filter-section">
                     <label for="position-filter">Filter:</label>
@@ -198,6 +207,7 @@
     <script src="static/stats.js"></script>
     <script src="static/supabase-client.js"></script>
     <script src="static/player-comparison.js"></script>
+    <script src="static/projection-upload.js"></script>
     <script src="static/main.js"></script>
     <script src="static/valuation.js"></script>
     <script src="static/analysis.js"></script>
@@ -223,6 +233,51 @@
                 <button type="button" id="scoring-reset" class="scoring-reset">Reset to defaults</button>
                 <button type="button" id="calculate-btn">Apply</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Upload projections modal, opened from the Projections dropdown's Upload CSV button -->
+    <div id="upload-modal" class="modal scoring-modal upload-modal" role="dialog" aria-modal="true" aria-labelledby="upload-title">
+        <div class="modal-content">
+            <button type="button" class="close-btn upload-close" aria-label="Close upload projections">&times;</button>
+            <h2 id="upload-title">Upload Your Own Projections</h2>
+            <p class="scoring-note">Use projections from any source for the projected season. Your files stay in this browser: they are read here and never uploaded to a server. Players your files don't cover keep their Marcel projection.</p>
+
+            <div class="upload-current" id="upload-current" hidden>
+                <div class="upload-current-info"></div>
+                <button type="button" id="upload-remove" class="scoring-reset">Remove</button>
+            </div>
+
+            <div class="upload-form">
+                <label for="upload-files">CSV files (batters, pitchers, or both)</label>
+                <input type="file" id="upload-files" accept=".csv,text/csv" multiple>
+                <label for="upload-name">Name for this set</label>
+                <input type="text" id="upload-name" placeholder="e.g. ZiPS, My projections" maxlength="40">
+                <div class="scoring-actions">
+                    <button type="button" id="upload-submit">Use these projections</button>
+                </div>
+                <div id="upload-status" class="upload-status" role="status" aria-live="polite"></div>
+            </div>
+
+            <details class="upload-help" open>
+                <summary>File format</summary>
+                <p>Comma-separated (.csv) with a header row, then one row per player. Use one file for batters and one for pitchers; choose both at once. A file with an <code>IP</code> column is read as pitchers. Column names aren't case-sensitive, and other columns are ignored.</p>
+                <table class="upload-columns">
+                    <thead><tr><th></th><th>Required</th><th>Optional</th></tr></thead>
+                    <tbody>
+                        <tr><th>Batters</th><td><code>Name</code> <code>PA</code> <code>AB</code> <code>H</code> <code>HR</code></td><td><code>2B</code> <code>3B</code> <code>R</code> <code>RBI</code> <code>SB</code> <code>CS</code> <code>BB</code> <code>SO</code> <code>HBP</code> <code>SF</code></td></tr>
+                        <tr><th>Pitchers</th><td><code>Name</code> <code>IP</code> <code>SO</code> (or <code>K</code>) <code>BB</code> <code>ER</code></td><td><code>G</code> <code>GS</code> <code>W</code> <code>L</code> <code>SV</code> <code>HLD</code> <code>H</code> <code>HR</code> <code>R</code> <code>HBP</code></td></tr>
+                        <tr><th>Both</th><td></td><td><code>MLBAMID</code>, the MLB player id, for exact matching</td></tr>
+                    </tbody>
+                </table>
+                <ul>
+                    <li>Use season totals (counting stats). AVG, OBP, SLG, ERA, WHIP, FIP and K/9 are calculated from them, so rate columns in the file are ignored.</li>
+                    <li>Players are matched by <code>MLBAMID</code> when the file has it, or else by name. Two players with the same name can't be told apart without the id, so those rows are skipped.</li>
+                    <li>A stat left out counts as 0, which matters if your scoring uses it.</li>
+                    <li>FanGraphs projection exports (Steamer, ZiPS, ATC, THE BAT, Depth Charts) work as they are: use "Export Data" on the projections page.</li>
+                </ul>
+                <p>Templates: <button type="button" class="link-btn" data-template="batters">batters CSV</button> · <button type="button" class="link-btn" data-template="pitchers">pitchers CSV</button></p>
+            </details>
         </div>
     </div>
 

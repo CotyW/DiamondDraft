@@ -584,3 +584,42 @@ footer a:hover {
 @media (max-width: 768px) {
     .scoring-modal .weight-inputs { flex-direction: column; }
 }
+
+/* Projection system dropdown: greyed out until the projected season is selected */
+.filter-section select:disabled { background-color: #F1F5F9; color: #94A3B8; cursor: not-allowed; }
+.projection-source:has(select:disabled) label { color: #94A3B8; }
+
+/* Upload CSV button beside the Projections dropdown */
+.upload-open {
+    margin-left: 8px;
+    padding: 7px 12px;
+    font-size: 0.85rem;
+    background: #fff;
+    color: var(--primary-blue);
+    border: 1px solid var(--primary-blue);
+}
+.upload-open:hover { background: var(--pale-blue); }
+
+/* Upload projections modal (shares the Scoring Weights overlay and card styles) */
+.upload-modal .modal-content { width: min(680px, 94vw); }
+.upload-form { display: grid; gap: 6px; margin-bottom: 14px; }
+.upload-form label { font-weight: 600; color: var(--navy); font-size: 0.9rem; margin-top: 6px; }
+.upload-form input[type="text"] { padding: 7px 10px; border: 1px solid #D1D5DB; border-radius: 6px; max-width: 320px; }
+.upload-status { font-size: 0.9rem; color: #166534; min-height: 1.2em; }
+.upload-status.error { color: #B91C1C; }
+.upload-current {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    background: var(--pale-blue); border-radius: 6px; padding: 10px 14px; margin-bottom: 12px; font-size: 0.9rem;
+}
+.upload-current[hidden] { display: none; }
+.upload-help { font-size: 0.88rem; color: #334155; border-top: 1px solid #E2E8F0; padding-top: 10px; }
+.upload-help summary { cursor: pointer; font-weight: 600; color: var(--navy); margin-bottom: 8px; }
+.upload-help p, .upload-help ul { margin: 0 0 10px; }
+.upload-help ul { padding-left: 20px; }
+.upload-help li { margin-bottom: 4px; }
+.upload-help code { background: #F1F5F9; border-radius: 3px; padding: 0 4px; font-size: 0.85em; }
+.upload-columns { border-collapse: collapse; margin-bottom: 10px; width: 100%; }
+.upload-columns th, .upload-columns td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top; }
+.upload-columns thead th { color: #64748B; font-weight: 600; font-size: 0.8rem; }
+.link-btn { background: none; border: none; padding: 0; color: var(--primary-blue); text-decoration: underline; cursor: pointer; font: inherit; }
+.link-btn:hover { background: none; box-shadow: none; transform: none; color: var(--navy); }
