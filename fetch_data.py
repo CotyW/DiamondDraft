@@ -416,7 +416,7 @@ def fetch_players_data(seasons=None, projection_year=None, force=False):
 def fetch_player_by_name(player_name):
     """Search for a player by name in the MLB Stats API."""
     try:
-        response = requests.get(f"{BASE_URL}/v1/people/search?names={player_name}", timeout=30)
+        response = requests.get(f"{BASE_URL}/v1/people/search", params={'names': player_name}, timeout=30)
         if response.status_code != 200:
             return None
         return response.json().get('people', [])

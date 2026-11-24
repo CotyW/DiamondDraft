@@ -21,7 +21,7 @@ def build_records(players):
             'name': p['name'],
             'team': p.get('team'),
             'position': p.get('position'),
-            'primary_position': p.get('position'),
+            'primary_position': p.get('primary_position') or (p.get('position') or '').split('/')[0] or None,
         })
         # Every season in the file is uploaded, including the projection year
         for season, s in p.get('stats', {}).items():

@@ -608,7 +608,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const summary = uploaded.files.map(f => {
             const missed = f.rows - f.matched;
             const examples = f.unmatched.length ? ` (e.g. ${f.unmatched.map(escapeHtml).join(', ')})` : '';
-            return `${f.matched} of ${f.rows} ${f.kind} matched${missed ? `; ${missed} aren't in our player list${examples}` : ''}.`;
+            return `${f.matched} of ${f.rows} ${f.kind} matched${missed ? `; ${missed} ${missed === 1 ? "isn't" : "aren't"} in our player list${examples}` : ''}.`;
         }).join('<br>');
         showUploadStatus(summary + (stored ? '' : '<br>Your browser wouldn\'t save the file, so it lasts until you leave this page.'));
         // Show the result: switch to the projected season if another one is selected
@@ -1004,9 +1004,9 @@ document.addEventListener('DOMContentLoaded', function() {
             return parts.slice(-1)[0];
         }
 
-        cells.push(`<td><a href="#" class="player-name-link" data-player-id="${player.id}">${player.name || ''}</a></td>`);
-        cells.push(`<td class="team-column">${getTeamNickname(player.team)}</td>`);
-        cells.push(`<td class="position-column">${player.position || ''}</td>`);
+        cells.push(`<td><a href="#" class="player-name-link" data-player-id="${escapeHtml(player.id)}">${escapeHtml(player.name || '')}</a></td>`);
+        cells.push(`<td class="team-column">${escapeHtml(getTeamNickname(player.team) || '')}</td>`);
+        cells.push(`<td class="position-column">${escapeHtml(player.position || '')}</td>`);
 
         tableColumns.forEach(c => {
             const cls = c.group === 'pit' ? 'pitching-stat' : 'batting-stat';
@@ -1135,10 +1135,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const cardHTML = `
             <div class="player-card">
                 <div class="player-card-header">
-                    <h2 class="player-card-name">${player.name}</h2>
+                    <h2 class="player-card-name">${escapeHtml(player.name || '')}</h2>
                     <div class="player-card-info">
-                        <span class="player-card-team">${player.team}</span>
-                        <span class="player-card-position">${player.position}</span>
+                        <span class="player-card-team">${escapeHtml(player.team || '')}</span>
+                        <span class="player-card-position">${escapeHtml(player.position || '')}</span>
                     </div>
                 </div>
                 

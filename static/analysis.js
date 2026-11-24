@@ -38,7 +38,9 @@
 
     function saveSettings() {
         const { format, teams, slots, selected, catWeights, draftType, budget, hitterShare } = settings;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ format, teams, slots, selected, catWeights, draftType, budget, hitterShare }));
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ format, teams, slots, selected, catWeights, draftType, budget, hitterShare }));
+        } catch (e) { /* storage blocked or full: settings last until the page closes */ }
     }
 
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
