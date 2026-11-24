@@ -11,9 +11,10 @@ DiamondDraft is a web application for calculating and comparing baseball player 
 - **Draft Analysis panel** for roto, H2H categories or points leagues:
   - Category Impact: which categories are scarce or deep, and how much each is worth
   - Draft Board & Tiers: player values above replacement level, grouped into tiers
-  - Position Tiers: a tier sheet with a column per position (SP and RP by role), split where value drops sharply. Adjust any position: change how many tiers it has, start a new tier between any two players, or merge tiers. Your tiers carry into the Draft Board.
+  - Position Tiers: a tier sheet with a column per position (SP and RP by role), split where value drops sharply. Adjust any position: change how many tiers it has, start a new tier between any two players, or merge tiers. Your tiers carry into the Draft Board and Live Draft, which flags the last player left in a position's tier.
   - Position Scarcity: how steeply value drops at each position (including SP and RP)
   - Auction values: turns player value into dollars for your budget (e.g. $260 per team), with every drafted player worth at least $1 and an optional hitter/pitcher split
+  - Live Draft: record picks as they happen ("Mine" or "Taken", with the price in auctions). Shows who's left, how many remain in each tier and position, your roster by lineup slot, your category strength against an average team, and your next pick in a snake draft, with players whose ADP says they'll be gone by then. In auctions it tracks the league's money, inflation (remaining prices adjusted for what's been spent), your budget and your max bid, plus an inflation breakdown: what the room is paying over or under value at each position (pitchers by SP/RP role) and in each category, dollars per HR, SB or K so far, and how much of each category is still on the board. Player values stay the pre-draft values; picks are kept in your browser.
   - ADP comparison: upload an ADP file (NFBC, FantasyPros, or a FanGraphs export) to add ADP and "vs ADP" columns to the draft board, sort by them, and list the biggest bargains and reaches. The file is read and kept in your browser only.
 - Projections dropdown for the projected season, with **Upload CSV** for your own projection files (kept in your browser)
 
@@ -88,6 +89,7 @@ For long-term storage in Supabase:
 - `static/main.js` - Table, filters and calculator
 - `static/valuation.js` - Draft valuation engine (z-scores, replacement level, tiers)
 - `static/analysis.js`, `static/analysis.css` - Draft Analysis panel
+- `static/draft.js`, `static/draft-tracker.js` - Live Draft tab: pick tracking math, and the tab itself
 - `static/tiers.js`, `static/position-tiers.js` - Position Tiers tab: tier math, and the tab itself
 - `static/supabase-client.js` - Loads data from static JSON or Supabase
 - `fetch_data.py` - Fetches and processes MLB data

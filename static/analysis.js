@@ -171,7 +171,10 @@
         }
         if (activeTab === 'categories') outputEl.innerHTML = renderCategories();
         else if (activeTab === 'board') outputEl.innerHTML = renderBoard();
-        else if (activeTab === 'tiers' && window.DDPosTiers) {
+        else if (activeTab === 'live' && window.DDTracker) {
+            const posTiers = window.DDPosTiers ? window.DDPosTiers.compute(result) : null;
+            outputEl.innerHTML = window.DDTracker.render({ result, esc, fmt, adpOf, hasAdp: !!adpData, posTiers, rerender: render });
+        } else if (activeTab === 'tiers' && window.DDPosTiers) {
             outputEl.innerHTML = window.DDPosTiers.render({ result, esc, fmt, adpOf, rerender: render });
         } else outputEl.innerHTML = renderPositions();
     }
@@ -424,13 +427,15 @@
         const body = shown.map(r => {
             const tierBreak = r.tier !== lastTier && boardPos === 'all' && boardSort === 'value';
             lastTier = r.tier;
+            // Players already drafted in the Live Draft tab stay on the board, struck through
+            const pick = window.DDTracker ? window.DDTracker.pickOf(r.id) : null;
             const zs = zCols.map(c => {
                 const v = (c.g === 'pit') === r.isPitcher ? r.z[c.key] : null;
                 if (v === null || v === undefined) return '<td class="muted">·</td>';
                 const cls = v >= 1 ? 'zhi' : v <= -1 ? 'zlo' : '';
                 return `<td class="${cls}">${fmt(v, 1)}</td>`;
             }).join('');
-            return `<tr class="${tierBreak ? 'tier-start' : ''}">
+            return `<tr class="${tierBreak ? 'tier-start' : ''}${pick ? ' picked' : ''}"${pick ? ` title="${pick.mine ? 'On your team' : 'Drafted'}"` : ''}>
                 <td>${r.rank}</td>
                 <td><span class="tier-pill tier-${Math.min(r.tier, 10)}">T${r.tier}</span></td>
                 <td><a href="#" class="player-name-link" data-player-id="${esc(r.id)}">${esc(r.name)}</a></td>
@@ -466,6 +471,7 @@
     }
 
     renderSettings();
+    if (window.DDTracker) window.DDTracker.init(outputEl);
     if (window.DDPosTiers) window.DDPosTiers.init(outputEl);
     document.addEventListener('dd:players-updated', recompute);
     if (window.DDState && window.DDState.players.length) recompute();

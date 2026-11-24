@@ -69,6 +69,82 @@
 .adp-highlights .zlo { color: #b3261e; }
 .adp-highlights .muted, .adp-controls .muted { color: #777; }
 
+/* Draft board: players already drafted in the Live Draft tab */
+.analysis-table.board tr.picked td { color: #9aa3b5; }
+.analysis-table.board tr.picked td a { color: #9aa3b5; text-decoration: line-through; }
+
+/* Live Draft tab */
+.dt-status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px; background: #0D1824; color: #dbe6fa; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
+.dt-status strong { color: #fff; font-size: 1.05rem; }
+.dt-status .muted { color: #9db7e6; font-size: .85rem; }
+.dt-status .zlo { color: #ff9b8f; }
+.dt-status .zhi { color: #7fe0a6; }
+.dt-label { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: #9db7e6; }
+.dt-onclock { color: #FACC15 !important; }
+.dt-slot { font-size: .85rem; color: #dbe6fa; }
+.dt-slot input { width: 64px; margin-left: 6px; padding: 4px 6px; border-radius: 4px; border: 1px solid #4f6a92; }
+.dt-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.dt-btn { padding: 4px 10px; border: 1px solid #1B57C4; background: #fff; color: #1B57C4; border-radius: 5px; font-size: .82rem; font-weight: 600; cursor: pointer; }
+.dt-btn:hover:not(:disabled) { background: #EEF3FC; }
+.dt-btn:disabled { opacity: .45; cursor: default; }
+.dt-btn.mine { background: #1B57C4; color: #fff; }
+.dt-btn.mine:hover { background: #164aa8; }
+.dt-btn.danger { border-color: #b3261e; background: #b3261e; color: #fff; }
+.dt-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+.dt-left { display: grid; gap: 6px; margin-bottom: 10px; font-size: .85rem; }
+.dt-left .dt-label { display: inline-block; margin-right: 8px; color: #64748b; min-width: 110px; }
+.dt-chip { display: inline-flex; align-items: center; gap: 4px; margin: 0 8px 4px 0; }
+.dt-filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-bottom: 8px; font-size: .9rem; }
+.dt-filters input[type=search] { flex: 1 1 240px; padding: 7px 10px; border: 1px solid #D1D5DB; border-radius: 6px; }
+.dt-check { display: inline-flex; align-items: center; gap: 6px; }
+.dt-table td.dt-row-actions { white-space: nowrap; }
+.dt-table .dt-row-actions .dt-btn { margin-left: 4px; }
+.dt-price { width: 58px; padding: 3px 5px; border: 1px solid #D1D5DB; border-radius: 4px; }
+.dt-flag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 8px; font-size: .72rem; font-weight: 600; }
+.dt-flag.gone { background: #fde2e0; color: #b3261e; }
+.dt-flag.mine { background: #dcf3e4; color: #0a7a3d; }
+.dt-side { display: grid; gap: 12px; }
+.dt-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; background: #fbfcfe; font-size: .88rem; }
+.dt-card h4 { margin: 0 0 8px; }
+.dt-card h4 small { font-weight: 400; color: #64748b; }
+.dt-card .muted { color: #8792a6; }
+.dt-roster, .dt-picks { list-style: none; margin: 0; padding: 0; }
+.dt-roster li, .dt-picks li { display: flex; align-items: baseline; gap: 6px; padding: 3px 0; border-bottom: 1px dashed #e5e9f2; }
+.dt-roster li:last-child, .dt-picks li:last-child { border-bottom: none; }
+.dt-slotname { display: inline-block; min-width: 30px; font-weight: 700; color: #0f2f73; font-size: .8rem; }
+.dt-x { margin-left: auto; background: none; border: none; color: #94a3b8; font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0 4px; }
+.dt-x:hover { color: #b3261e; }
+.dt-strength { width: 100%; border-collapse: collapse; }
+.dt-strength th { text-align: left; font-size: .75rem; color: #64748b; font-weight: 600; }
+.dt-strength td { padding: 3px 4px; }
+.dt-strength td:nth-child(2), .dt-strength td:nth-child(4) { text-align: right; }
+.dt-strength .zhi { color: #0a7a3d; font-weight: 600; }
+.dt-strength .zlo { color: #b3261e; font-weight: 600; }
+.dt-bar { position: relative; display: block; width: 90px; height: 8px; background: #eef1f6; border-radius: 4px; }
+.dt-bar::after { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: #94a3b8; }
+.dt-bar span { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
+.dt-bar .pos { background: #22a35a; }
+.dt-bar .neg { background: #d9534f; }
+@media (max-width: 900px) { .dt-layout { grid-template-columns: 1fr; } .dt-actions { margin-left: 0; } }
+
+/* Live Draft: auction inflation breakdown */
+.dt-market-wrap { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 14px; margin-bottom: 12px; background: #fbfcfe; }
+.dt-market-wrap summary { cursor: pointer; font-weight: 700; color: #0f2f73; }
+.dt-market-wrap summary .muted { font-weight: 400; color: #8792a6; }
+.dt-market-wrap .analysis-note { margin: 6px 0 8px; }
+.dt-market-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 8px 28px; }
+.dt-market-grid h4 { margin: 6px 0; }
+.dt-market { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.dt-market th { text-align: right; font-size: .75rem; color: #64748b; font-weight: 600; padding: 3px 6px; border-bottom: 1px solid #e2e8f0; }
+.dt-market td { text-align: right; padding: 3px 6px; border-bottom: 1px solid #f0f3f8; white-space: nowrap; }
+.dt-market th:first-child, .dt-market td:first-child { text-align: left; }
+.dt-market .muted { color: #9aa3b5; }
+.dt-prem { font-weight: 600; }
+.dt-prem.hot { color: #b3261e; }
+.dt-prem.cold { color: #0a7a3d; }
+.dt-share { display: inline-block; width: 46px; height: 6px; margin-right: 6px; background: #eef1f6; border-radius: 3px; vertical-align: middle; overflow: hidden; }
+.dt-share span { display: block; height: 100%; background: #1B57C4; }
+
 /* Position Tiers tab */
 .pt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; align-items: start; }
 .pt-col { border: 1px solid #e2e8f0; border-radius: 8px; background: #fbfcfe; padding: 8px 10px; max-height: 720px; overflow-y: auto; }
@@ -94,3 +170,6 @@
 .pt-split { display: block; width: 100%; height: 7px; margin: -1px 0; padding: 0; border: none; background: none; cursor: row-resize; position: relative; }
 .pt-split:hover::after, .pt-split:focus-visible::after { content: 'new tier here'; position: absolute; left: 0; right: 0; top: 50%; border-top: 2px dashed #1B57C4; font-size: .65rem; color: #1B57C4; text-align: right; line-height: 0; padding-right: 2px; }
 .pt-more { margin-top: 4px; font-size: .8rem; background: none; border: none; color: #1B57C4; cursor: pointer; padding: 2px 0; }
+/* Live Draft: last player in a position tier */
+.dt-flag.last { background: #fff0c9; color: #8a6100; }
+.dt-chip.dt-last strong { color: #b3261e; }
