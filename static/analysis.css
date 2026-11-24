@@ -68,3 +68,29 @@
 .adp-highlights .zhi { color: #0a7a3d; }
 .adp-highlights .zlo { color: #b3261e; }
 .adp-highlights .muted, .adp-controls .muted { color: #777; }
+
+/* Position Tiers tab */
+.pt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; align-items: start; }
+.pt-col { border: 1px solid #e2e8f0; border-radius: 8px; background: #fbfcfe; padding: 8px 10px; max-height: 720px; overflow-y: auto; }
+.pt-col-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; position: sticky; top: -8px; background: #fbfcfe; padding: 4px 0 6px; z-index: 1; border-bottom: 1px solid #e2e8f0; margin-bottom: 6px; }
+.pt-col-head strong { font-size: 1.05rem; color: #0f2f73; }
+.pt-stepper { display: inline-flex; align-items: center; gap: 4px; font-size: .8rem; color: #475569; }
+.pt-stepper button { width: 22px; height: 22px; padding: 0; border: 1px solid #1B57C4; background: #fff; color: #1B57C4; border-radius: 4px; font-weight: 700; line-height: 1; cursor: pointer; }
+.pt-stepper button:disabled { opacity: .35; cursor: default; }
+.pt-reset { font-size: .78rem; }
+.pt-tier { border-left: 3px solid #1B57C4; padding-left: 6px; margin: 6px 0 8px; }
+.pt-tier.empty { opacity: .5; border-left-color: #cbd5e1; }
+.pt-tier-head { display: flex; align-items: center; gap: 6px; font-size: .78rem; margin-bottom: 2px; }
+.pt-tier-head .muted { color: #8792a6; }
+.pt-merge { margin-left: auto; background: none; border: none; color: #94a3b8; font-size: 1rem; line-height: 1; cursor: pointer; padding: 0 4px; }
+.pt-merge:hover { color: #b3261e; }
+.pt-player { display: flex; align-items: baseline; gap: 6px; font-size: .86rem; padding: 1px 0; }
+.pt-player a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pt-player.picked a { color: #9aa3b5; text-decoration: line-through; }
+.pt-player.picked .pt-val { color: #9aa3b5; }
+.pt-val { font-variant-numeric: tabular-nums; font-weight: 600; color: #0f2f73; }
+.pt-adp { font-size: .72rem; color: #64748b; background: #eef1f6; border-radius: 6px; padding: 0 5px; }
+/* The gap between two players: hover shows where a new tier would start */
+.pt-split { display: block; width: 100%; height: 7px; margin: -1px 0; padding: 0; border: none; background: none; cursor: row-resize; position: relative; }
+.pt-split:hover::after, .pt-split:focus-visible::after { content: 'new tier here'; position: absolute; left: 0; right: 0; top: 50%; border-top: 2px dashed #1B57C4; font-size: .65rem; color: #1B57C4; text-align: right; line-height: 0; padding-right: 2px; }
+.pt-more { margin-top: 4px; font-size: .8rem; background: none; border: none; color: #1B57C4; cursor: pointer; padding: 2px 0; }

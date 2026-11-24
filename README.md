@@ -11,6 +11,7 @@ DiamondDraft is a web application for calculating and comparing baseball player 
 - **Draft Analysis panel** for roto, H2H categories or points leagues:
   - Category Impact: which categories are scarce or deep, and how much each is worth
   - Draft Board & Tiers: player values above replacement level, grouped into tiers
+  - Position Tiers: a tier sheet with a column per position (SP and RP by role), split where value drops sharply. Adjust any position: change how many tiers it has, start a new tier between any two players, or merge tiers. Your tiers carry into the Draft Board.
   - Position Scarcity: how steeply value drops at each position (including SP and RP)
   - Auction values: turns player value into dollars for your budget (e.g. $260 per team), with every drafted player worth at least $1 and an optional hitter/pitcher split
   - ADP comparison: upload an ADP file (NFBC, FantasyPros, or a FanGraphs export) to add ADP and "vs ADP" columns to the draft board, sort by them, and list the biggest bargains and reaches. The file is read and kept in your browser only.
@@ -87,6 +88,7 @@ For long-term storage in Supabase:
 - `static/main.js` - Table, filters and calculator
 - `static/valuation.js` - Draft valuation engine (z-scores, replacement level, tiers)
 - `static/analysis.js`, `static/analysis.css` - Draft Analysis panel
+- `static/tiers.js`, `static/position-tiers.js` - Position Tiers tab: tier math, and the tab itself
 - `static/supabase-client.js` - Loads data from static JSON or Supabase
 - `fetch_data.py` - Fetches and processes MLB data
 - `projections.py` - Season stat lines and the Marcel projection

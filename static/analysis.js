@@ -171,7 +171,9 @@
         }
         if (activeTab === 'categories') outputEl.innerHTML = renderCategories();
         else if (activeTab === 'board') outputEl.innerHTML = renderBoard();
-        else outputEl.innerHTML = renderPositions();
+        else if (activeTab === 'tiers' && window.DDPosTiers) {
+            outputEl.innerHTML = window.DDPosTiers.render({ result, esc, fmt, adpOf, rerender: render });
+        } else outputEl.innerHTML = renderPositions();
     }
 
     function categoryTable(cats) {
@@ -385,6 +387,15 @@
         </div>`;
     }
 
+    // The player's tier at his position, from the Position Tiers tab (adjustable there)
+    function posTierCell(r) {
+        if (!window.DDPosTiers) return r.posTier ? 'P' + r.posTier : '';
+        const pt = window.DDPosTiers.compute(result);
+        const key = pt.keyOf(r);
+        const tier = (pt.index[String(r.id)] || {})[key];
+        return tier ? `<span title="Tier ${tier} at ${key}">${key} ${tier}</span>` : '';
+    }
+
     function renderBoard() {
         const s = result.settings;
         let list = result.board;
@@ -427,7 +438,7 @@
                 ${auction ? `<td><strong>$${Math.round(r.dollars)}</strong></td>` : ''}
                 <td>${auction ? fmt(r.vorp, 1) : `<strong>${fmt(r.vorp, 1)}</strong>`}</td>
                 ${adpData ? adpCells(r, teams) : ''}
-                <td>${r.posTier ? 'P' + r.posTier : ''}</td>${zs}</tr>`;
+                <td>${posTierCell(r)}</td>${zs}</tr>`;
         }).join('');
         const sortSelect = adpData ? `<label>Sort <select id="board-sort">
                 <option value="value"${boardSort === 'value' ? ' selected' : ''}>${auction ? 'Auction value' : 'Value'}</option>
@@ -436,7 +447,7 @@
             </select></label>` : '';
         return `${adpControls()}${adpHighlights()}
             <div class="board-controls"><label>Position <select id="board-pos">${posOptions}</select></label>${sortSelect}
-            <span class="analysis-note">Value = ${s.format === 'points' ? 'points' : 'summed category z-scores'} above a replacement-level player at the position. Tiers (T) split where value drops sharply; P-tiers are within a position.${auction ? ` $ = auction value: $${s.budget} × ${s.teams} teams = $${auction.total}, every drafted player at least $1, the rest split by value; ${Math.round(auction.hitterShare * 100)}% goes to hitters${s.hitterShare === null || s.hitterShare === undefined ? ' (by value)' : ''}.` : ''}</span></div>
+            <span class="analysis-note">Value = ${s.format === 'points' ? 'points' : 'summed category z-scores'} above a replacement-level player at the position. Tiers (T) split where value drops sharply; Pos tier = the player's tier at his position (set them in Position Tiers).${auction ? ` $ = auction value: $${s.budget} × ${s.teams} teams = $${auction.total}, every drafted player at least $1, the rest split by value; ${Math.round(auction.hitterShare * 100)}% goes to hitters${s.hitterShare === null || s.hitterShare === undefined ? ' (by value)' : ''}.` : ''}</span></div>
             <div class="analysis-scroll"><table class="analysis-table board">
             <thead><tr><th>#</th><th>Tier</th><th>Player</th><th>Team</th><th>Pos</th>${auction ? '<th title="Auction value">$</th>' : ''}<th>Value</th>${adpData ? '<th title="Average draft position from your ADP file">ADP</th><th title="ADP minus our rank: + means he usually goes later than his value (a bargain), − means earlier (a reach)">vs ADP</th>' : ''}<th>Pos tier</th>${head}</tr></thead>
             <tbody>${body}</tbody></table></div>
@@ -455,6 +466,7 @@
     }
 
     renderSettings();
+    if (window.DDPosTiers) window.DDPosTiers.init(outputEl);
     document.addEventListener('dd:players-updated', recompute);
     if (window.DDState && window.DDState.players.length) recompute();
 })();

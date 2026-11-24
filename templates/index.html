@@ -174,6 +174,7 @@
         <div class="analysis-tabs" role="tablist">
             <button class="analysis-tab active" data-tab="categories" role="tab">Category Impact</button>
             <button class="analysis-tab" data-tab="board" role="tab">Draft Board &amp; Tiers</button>
+            <button class="analysis-tab" data-tab="tiers" role="tab">Position Tiers</button>
             <button class="analysis-tab" data-tab="positions" role="tab">Position Scarcity</button>
         </div>
         <div id="analysis-output" class="analysis-output">Loading analysis...</div>
@@ -210,6 +211,8 @@
     <script src="{{ url_for('static', filename='projection-upload.js') }}"></script>
     <script src="{{ url_for('static', filename='main.js') }}"></script>
     <script src="{{ url_for('static', filename='valuation.js') }}"></script>
+    <script src="{{ url_for('static', filename='tiers.js') }}"></script>
+    <script src="{{ url_for('static', filename='position-tiers.js') }}"></script>
     <script src="{{ url_for('static', filename='analysis.js') }}"></script>
     
     <!-- Scoring Weights modal, opened from Player Rankings (and the header's Scoring link) -->
