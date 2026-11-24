@@ -14,6 +14,7 @@
     let activeTab = 'categories';
     let boardPos = 'all';
     let boardLimit = 60;
+    let boardSort = 'value';  // 'value', 'adp' or 'diff' (best value vs ADP first)
     const catView = { bat: 'impact', pit: 'impact' }; // per group: category table or overlap matrix
     let settings = loadSettings();
     let result = null;
@@ -128,9 +129,13 @@
 
     outputEl.addEventListener('change', e => {
         if (e.target.id === 'board-pos') { boardPos = e.target.value; boardLimit = 60; render(); }
+        if (e.target.id === 'board-sort') { boardSort = e.target.value; boardLimit = 60; render(); }
+        if (e.target.id === 'adp-file') useAdpFile(e.target.files[0]);
     });
     outputEl.addEventListener('click', e => {
         if (e.target.id === 'board-more') { boardLimit += 60; render(); }
+        if (e.target.id === 'adp-remove') removeAdp();
+        if (e.target.id === 'adp-template') downloadAdpTemplate();
         const toggle = e.target.closest('[data-catview]');
         if (toggle) {
             const [g, view] = toggle.dataset.catview.split(':');
@@ -245,6 +250,141 @@
             ${view === 'overlap' ? correlationTable(corr) : categoryTable(cats)}`;
     }
 
+    // ADP: a file the visitor uploads (projection-upload.js reads it); kept in this browser only
+    const ADP_KEY = 'dd-adp';
+    const U = window.DDUpload;
+    let adpData = loadAdp();     // {filename, rows, matched, unmatched, adp: {playerId: {adp, min, max}}}
+    let adpMessage = null;       // {text, error} shown beside the upload control
+
+    function loadAdp() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(ADP_KEY) || 'null');
+            return saved && saved.adp ? saved : null;
+        } catch (e) { return null; }
+    }
+
+    async function useAdpFile(file) {
+        if (!file || !U) return;
+        try {
+            const rows = U.readAdpFile(await file.text());
+            const players = (window.DDState && window.DDState.players) || [];
+            const result = U.matchAdp(players, rows);
+            if (!result.matched) throw new Error('No rows matched our players. Check the Name column, or add an MLBAMID column.');
+            adpData = { filename: file.name, rows: rows.length, matched: result.matched,
+                unmatched: result.unmatched.slice(0, 5), adp: result.adp };
+            let stored = true;
+            try { localStorage.setItem(ADP_KEY, JSON.stringify(adpData)); } catch (e) { stored = false; }
+            const missed = rows.length - result.matched;
+            const examples = adpData.unmatched.length ? ` (e.g. ${adpData.unmatched.join(', ')})` : '';
+            adpMessage = { text: `${result.matched} of ${rows.length} players matched.`
+                + (missed ? ` ${missed} ${missed === 1 ? "isn't" : "aren't"} in our player list${examples}.` : '')
+                + (stored ? '' : ' Your browser wouldn\'t save the file, so it lasts until you leave this page.') };
+        } catch (e) {
+            adpMessage = { text: `${file.name}: ${e.message}`, error: true };
+        }
+        render();
+    }
+
+    function removeAdp() {
+        adpData = null;
+        adpMessage = null;
+        if (boardSort !== 'value') boardSort = 'value';
+        try { localStorage.removeItem(ADP_KEY); } catch (e) { /* storage blocked */ }
+        render();
+    }
+
+    function downloadAdpTemplate() {
+        const url = URL.createObjectURL(new Blob([U.TEMPLATES.adp], { type: 'text/csv' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'adp-template.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+
+    const adpOf = r => (adpData ? adpData.adp[String(r.id)] || null : null);
+    // Picks between where the market takes a player and where our value ranks him:
+    // positive = he usually goes later than his value (a bargain), negative = earlier (a reach)
+    // A two-way player's shared ADP is measured against his better-ranked entry
+    let sharedCache = { result: null, best: null };
+    function sharedBestRank(key) {
+        if (sharedCache.result !== result) {
+            const best = {};
+            result.board.forEach(r => {
+                const a = adpOf(r);
+                if (a && a.shared && (!best[a.shared] || r.rank < best[a.shared])) best[a.shared] = r.rank;
+            });
+            sharedCache = { result, best };
+        }
+        return sharedCache.best[key] || null;
+    }
+    const rankFor = r => { const a = adpOf(r); return a && a.shared ? sharedBestRank(a.shared) : r.rank || null; };
+    const adpDiff = r => { const a = adpOf(r); const rank = rankFor(r); return a && rank ? a.adp - rank : null; };
+    // Lists show a two-way player once
+    function onePerPerson(items, rowOf) {
+        const seen = new Set();
+        return items.filter(x => {
+            const a = adpOf(rowOf(x));
+            if (!a || !a.shared) return true;
+            if (seen.has(a.shared)) return false;
+            seen.add(a.shared);
+            return true;
+        });
+    }
+
+    function adpCells(r, teams) {
+        const a = adpOf(r);
+        if (!a) return '<td class="muted">—</td><td class="muted">·</td>';
+        const range = a.min && a.max ? ` title="Picked from ${fmt(a.min, 0)} to ${fmt(a.max, 0)}"` : '';
+        const d = adpDiff(r);
+        // A gap of a full round or more is worth noticing
+        const cls = d >= teams ? 'zhi' : d <= -teams ? 'zlo' : '';
+        return `<td${range}>${fmt(a.adp, 1)}</td><td class="${cls}">${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.round(Math.abs(d))}</td>`;
+    }
+
+    function adpControls() {
+        const msg = adpMessage ? `<span class="adp-message${adpMessage.error ? ' error' : ''}" role="status">${esc(adpMessage.text)}</span>` : '';
+        const loaded = adpData
+            ? `<span class="adp-loaded">ADP: <strong>${esc(adpData.filename)}</strong> · ${adpData.matched} matched
+                <button type="button" class="link-btn" id="adp-remove">Remove</button></span>`
+            : '';
+        return `<div class="adp-controls">
+            <label class="adp-upload">${adpData ? 'Replace ADP' : 'Compare to ADP'}
+                <input type="file" id="adp-file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values">
+            </label>
+            ${loaded}${msg}
+            <details class="adp-help">
+                <summary>ADP file format</summary>
+                <p>A .csv or tab-separated file with a header row. It needs a <code>Name</code> (or <code>Player</code>) column and an <code>ADP</code> column (<code>AVG</code> works too). Optional: <code>MLBAMID</code> for exact matching, <code>Team</code> and <code>POS</code> to tell apart players with the same name, and <code>Min Pick</code> / <code>Max Pick</code>. Names can be "First Last" or "Last, First".</p>
+                <p>NFBC and FantasyPros ADP downloads work, and so do FanGraphs projection exports, which include NFBC ADP. The file stays in this browser. <button type="button" class="link-btn" id="adp-template">Download a template</button></p>
+            </details>
+        </div>`;
+    }
+
+    // Biggest gaps between value and ADP among players the market drafts in a league this size
+    function adpHighlights() {
+        if (!adpData) return '';
+        const poolSize = result.board.length;
+        const bargains = onePerPerson(result.board.filter(r => adpDiff(r) !== null)
+            .sort((a, b) => adpDiff(b) - adpDiff(a)), r => r).slice(0, 6).filter(r => adpDiff(r) >= 1);
+        // Reaches: drafted early by the market but ranked later by us, including players we
+        // don't draft at all at these settings
+        const reaches = onePerPerson(result.rows
+            .map(r => ({ r, a: adpOf(r) }))
+            .filter(x => x.a && x.a.adp <= poolSize)
+            .map(x => ({ ...x, rank: rankFor(x.r), diff: x.a.adp - (rankFor(x.r) || poolSize + 1) }))
+            .sort((a, b) => a.diff - b.diff), x => x.r).slice(0, 6).filter(x => x.diff <= -1);
+        const link = r => `<a href="#" class="player-name-link" data-player-id="${esc(r.id)}">${esc(r.name)}</a>`;
+        const item = (r, adp, diff, outside) =>
+            `<li>${link(r)} <span class="muted">ADP ${fmt(adp, 1)} · ${outside ? 'outside our pool' : `our #${rankFor(r)}`}</span> <strong class="${diff > 0 ? 'zhi' : 'zlo'}">${diff > 0 ? '+' : '−'}${Math.round(Math.abs(diff))}</strong></li>`;
+        return `<div class="adp-highlights">
+            <div><h4>Bargains <small>go later than their value</small></h4><ul>${bargains.map(r => item(r, adpOf(r).adp, adpDiff(r))).join('') || '<li class="muted">None</li>'}</ul></div>
+            <div><h4>Reaches <small>go earlier than their value</small></h4><ul>${reaches.map(x => item(x.r, x.a.adp, x.diff, !x.rank)).join('') || '<li class="muted">None</li>'}</ul></div>
+        </div>`;
+    }
+
     function renderBoard() {
         const s = result.settings;
         let list = result.board;
@@ -252,8 +392,16 @@
             const slot = boardPos === 'DH' ? 'UTIL' : boardPos;
             list = list.filter(r => r.elig.includes(slot));
         }
+        if (adpData && boardSort !== 'value') {
+            const big = Number.MAX_VALUE;
+            const key = boardSort === 'adp'
+                ? r => (adpOf(r) ? adpOf(r).adp : big)
+                : r => (adpDiff(r) === null ? big : -adpDiff(r));
+            list = [...list].sort((a, b) => key(a) - key(b) || a.rank - b.rank);
+        }
         const shown = list.slice(0, boardLimit);
         const auction = result.auction;
+        const teams = s.teams;
         const zCols = s.format === 'points' ? [] : [
             ...result.categories.bat.filter(c => c.inLeague).map(c => ({ ...c, g: 'bat' })),
             ...result.categories.pit.filter(c => c.inLeague).map(c => ({ ...c, g: 'pit' }))
@@ -263,7 +411,7 @@
         const head = zCols.map(c => `<th title="Category z-score">${esc(c.label)}</th>`).join('');
         let lastTier = null;
         const body = shown.map(r => {
-            const tierBreak = r.tier !== lastTier && boardPos === 'all';
+            const tierBreak = r.tier !== lastTier && boardPos === 'all' && boardSort === 'value';
             lastTier = r.tier;
             const zs = zCols.map(c => {
                 const v = (c.g === 'pit') === r.isPitcher ? r.z[c.key] : null;
@@ -278,12 +426,19 @@
                 <td>${esc(r.team)}</td><td title="Value counted at ${esc(r.pos)}">${esc(r.position || r.pos)}</td>
                 ${auction ? `<td><strong>$${Math.round(r.dollars)}</strong></td>` : ''}
                 <td>${auction ? fmt(r.vorp, 1) : `<strong>${fmt(r.vorp, 1)}</strong>`}</td>
+                ${adpData ? adpCells(r, teams) : ''}
                 <td>${r.posTier ? 'P' + r.posTier : ''}</td>${zs}</tr>`;
         }).join('');
-        return `<div class="board-controls"><label>Position <select id="board-pos">${posOptions}</select></label>
+        const sortSelect = adpData ? `<label>Sort <select id="board-sort">
+                <option value="value"${boardSort === 'value' ? ' selected' : ''}>${auction ? 'Auction value' : 'Value'}</option>
+                <option value="adp"${boardSort === 'adp' ? ' selected' : ''}>ADP</option>
+                <option value="diff"${boardSort === 'diff' ? ' selected' : ''}>Best vs ADP</option>
+            </select></label>` : '';
+        return `${adpControls()}${adpHighlights()}
+            <div class="board-controls"><label>Position <select id="board-pos">${posOptions}</select></label>${sortSelect}
             <span class="analysis-note">Value = ${s.format === 'points' ? 'points' : 'summed category z-scores'} above a replacement-level player at the position. Tiers (T) split where value drops sharply; P-tiers are within a position.${auction ? ` $ = auction value: $${s.budget} × ${s.teams} teams = $${auction.total}, every drafted player at least $1, the rest split by value; ${Math.round(auction.hitterShare * 100)}% goes to hitters${s.hitterShare === null || s.hitterShare === undefined ? ' (by value)' : ''}.` : ''}</span></div>
             <div class="analysis-scroll"><table class="analysis-table board">
-            <thead><tr><th>#</th><th>Tier</th><th>Player</th><th>Team</th><th>Pos</th>${auction ? '<th title="Auction value">$</th>' : ''}<th>Value</th><th>Pos tier</th>${head}</tr></thead>
+            <thead><tr><th>#</th><th>Tier</th><th>Player</th><th>Team</th><th>Pos</th>${auction ? '<th title="Auction value">$</th>' : ''}<th>Value</th>${adpData ? '<th title="Average draft position from your ADP file">ADP</th><th title="ADP minus our rank: + means he usually goes later than his value (a bargain), − means earlier (a reach)">vs ADP</th>' : ''}<th>Pos tier</th>${head}</tr></thead>
             <tbody>${body}</tbody></table></div>
             ${list.length > shown.length ? `<button id="board-more" class="analysis-more">Show more (${list.length - shown.length} left)</button>` : ''}`;
     }

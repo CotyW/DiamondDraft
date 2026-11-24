@@ -47,3 +47,24 @@
 .view-toggle-btn { background: #fff; color: #1B57C4; border: none; padding: 4px 12px; font-size: .85rem; font-weight: 600; cursor: pointer; }
 .view-toggle-btn + .view-toggle-btn { border-left: 1px solid #1B57C4; }
 .view-toggle-btn.active { background: #1B57C4; color: #fff; }
+
+/* ADP comparison on the draft board */
+.adp-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 10px; font-size: .9rem; }
+.adp-upload { position: relative; display: inline-block; padding: 7px 14px; border: 1px solid #1B57C4; border-radius: 6px; color: #1B57C4; background: #fff; font-weight: 600; cursor: pointer; }
+.adp-upload:hover, .adp-upload:focus-within { background: #EEF3FC; }
+.adp-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.adp-message { color: #166534; }
+.adp-message.error { color: #b3261e; }
+.adp-help { flex-basis: 100%; color: #444; }
+.adp-help summary { cursor: pointer; color: #1B57C4; font-weight: 600; width: fit-content; }
+.adp-help p { margin: 6px 0; }
+.adp-help code { background: #F1F5F9; border-radius: 3px; padding: 0 4px; font-size: .85em; }
+.adp-highlights { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px 24px; margin: 4px 0 14px; padding: 12px 16px; background: #F8FAFD; border: 1px solid #E2E8F0; border-radius: 8px; }
+.adp-highlights h4 { margin: 0 0 6px; font-size: .95rem; color: #0D1824; }
+.adp-highlights h4 small { font-weight: 400; color: #666; }
+.adp-highlights ul { list-style: none; margin: 0; padding: 0; font-size: .9rem; }
+.adp-highlights li { padding: 3px 0; display: flex; gap: 8px; align-items: baseline; }
+.adp-highlights li strong { margin-left: auto; }
+.adp-highlights .zhi { color: #0a7a3d; }
+.adp-highlights .zlo { color: #b3261e; }
+.adp-highlights .muted, .adp-controls .muted { color: #777; }

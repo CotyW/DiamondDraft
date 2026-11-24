@@ -13,6 +13,7 @@ DiamondDraft is a web application for calculating and comparing baseball player 
   - Draft Board & Tiers: player values above replacement level, grouped into tiers
   - Position Scarcity: how steeply value drops at each position (including SP and RP)
   - Auction values: turns player value into dollars for your budget (e.g. $260 per team), with every drafted player worth at least $1 and an optional hitter/pitcher split
+  - ADP comparison: upload an ADP file (NFBC, FantasyPros, or a FanGraphs export) to add ADP and "vs ADP" columns to the draft board, sort by them, and list the biggest bargains and reaches. The file is read and kept in your browser only.
 - Projections dropdown for the projected season, with **Upload CSV** for your own projection files (kept in your browser)
 
 ## How It Works
